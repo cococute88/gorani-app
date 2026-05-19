@@ -13,7 +13,14 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUserInfo | null>(() => getCurrentAuthUser());
+  const [user, setUser] = useState<AuthUserInfo | null>(() => {
+    try {
+      return getCurrentAuthUser();
+    } catch (error) {
+      console.error("[AuthProvider] 초기 사용자 조회 실패:", error);
+      return null;
+    }
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const value = useMemo<AuthContextValue>(() => ({
@@ -39,7 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     refreshUser: () => {
-      setUser(getCurrentAuthUser());
+      try {
+        setUser(getCurrentAuthUser());
+      } catch (error) {
+        console.error("[AuthProvider] 사용자 새로고침 실패:", error);
+        setUser(null);
+      }
     },
   }), [user, isLoading]);
 
