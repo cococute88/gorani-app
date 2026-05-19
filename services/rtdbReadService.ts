@@ -1,10 +1,11 @@
 import { get, ref } from "firebase/database";
 
-import { firebaseDb } from "@/services/firebase";
+import { getFirebaseDb } from "@/services/firebase";
 import { toSafeUidAtDot, toSafeUidDotOnly, validateEmailForFirebase } from "@/utils/userKey";
 
 async function readPath<T>(path: string): Promise<T | null> {
-  const snapshot = await get(ref(firebaseDb, path));
+  const db = getFirebaseDb();
+  const snapshot = await get(ref(db, path));
   if (!snapshot.exists()) {
     return null;
   }
