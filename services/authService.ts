@@ -1,7 +1,7 @@
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 
-import { firebaseAuth } from "@/services/firebase";
+import { getFirebaseAuth } from "@/services/firebase";
 
 export type AuthUserInfo = {
   uid: string;
@@ -18,9 +18,7 @@ export function configureGoogleSignin() {
     );
   }
 
-  GoogleSignin.configure({
-    webClientId,
-  });
+  GoogleSignin.configure({ webClientId });
 }
 
 export async function signInWithGoogle(): Promise<AuthUserInfo> {
@@ -35,6 +33,7 @@ export async function signInWithGoogle(): Promise<AuthUserInfo> {
   }
 
   const credential = GoogleAuthProvider.credential(idToken);
+  const firebaseAuth = getFirebaseAuth();
   const userCredential = await signInWithCredential(firebaseAuth, credential);
   const email = userCredential.user.email;
 
@@ -50,20 +49,27 @@ export async function signInWithGoogle(): Promise<AuthUserInfo> {
 }
 
 export async function signOutFromGoogle(): Promise<void> {
+  const firebaseAuth = getFirebaseAuth();
   await firebaseSignOut(firebaseAuth);
   await GoogleSignin.signOut();
 }
 
 export function getCurrentAuthUser(): AuthUserInfo | null {
-  const currentUser = firebaseAuth.currentUser;
+  try {
+    const firebaseAuth = getFirebaseAuth();
+    const currentUser = firebaseAuth.currentUser;
 
-  if (!currentUser?.email) {
+    if (!currentUser?.email) {
+      return null;
+    }
+
+    return {
+      uid: currentUser.uid,
+      email: currentUser.email,
+      displayName: currentUser.displayName,
+    };
+  } catch (error) {
+    console.error("[authService] 현재 로그인 사용자 조회 실패:", error);
     return null;
   }
-
-  return {
-    uid: currentUser.uid,
-    email: currentUser.email,
-    displayName: currentUser.displayName,
-  };
 }
