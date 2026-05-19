@@ -1,38 +1,9 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
-
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>홈</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="calendar">
-        <Icon sf={{ default: "calendar", selected: "calendar.fill" }} />
-        <Label>캘린더</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="asset">
-        <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
-        <Label>자산</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="simulator">
-        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>시뮬레이터</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="calculator">
-        <Icon sf={{ default: "percent", selected: "percent" }} />
-        <Label>계산기</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
 
 function ClassicTabLayout() {
   const colors = useColors();
@@ -98,7 +69,6 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) return <NativeTabLayout />;
   return <ClassicTabLayout />;
 }
 
