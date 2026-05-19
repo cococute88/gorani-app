@@ -4,17 +4,17 @@ import { CalendarEvent, EventType } from "@/data/dummyData";
 import { useColors } from "@/hooks/useColors";
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  dividend_ex: "배당락일",
-  dividend_pay: "배당 입금 예상",
-  premarket: "장전 체크",
-  note: "메모",
+  "Ex-Div": "배당락일",
+  Pay: "배당 입금 예상",
+  Buy: "매수/체크",
+  Earn: "실적/메모",
 };
 
 const EVENT_COLORS: Record<EventType, string> = {
-  dividend_ex: "#E07B6A",
-  dividend_pay: "#6AAB82",
-  premarket: "#C9A96E",
-  note: "#8B6F47",
+  "Ex-Div": "#E07B6A",
+  Pay: "#6AAB82",
+  Buy: "#C9A96E",
+  Earn: "#8B6F47",
 };
 
 interface CalendarEventCardProps {
@@ -23,7 +23,7 @@ interface CalendarEventCardProps {
 
 export function CalendarEventCard({ event }: CalendarEventCardProps) {
   const colors = useColors();
-  const typeColor = EVENT_COLORS[event.type];
+  const typeColor = EVENT_COLORS[event.eventType];
   return (
     <View
       style={[
@@ -33,10 +33,10 @@ export function CalendarEventCard({ event }: CalendarEventCardProps) {
     >
       <View style={[styles.typePill, { backgroundColor: typeColor + "18" }]}>
         <Text style={[styles.typeText, { color: typeColor }]}>
-          {EVENT_TYPE_LABELS[event.type]}
+          {EVENT_TYPE_LABELS[event.eventType]}
         </Text>
       </View>
-      <Text style={[styles.title, { color: colors.text }]}>{event.title}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{event.customTitle ?? event.shortLabel}</Text>
       {event.ticker && (
         <Text style={[styles.ticker, { color: colors.secondary }]}>{event.ticker}</Text>
       )}
