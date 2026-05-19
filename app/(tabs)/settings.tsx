@@ -6,24 +6,38 @@ import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { settingsData } from "@/data/dummyData";
 import { useRouter } from "expo-router";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user, signIn, signOut } = useAuth();
   const [notifEnabled, setNotifEnabled] = useState(settingsData.notifEnabled);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO (Codex): Google OAuth 연결 — 여기에 GoogleSignIn 로직 추가
-    Alert.alert("준비 중", "Google 로그인은 추후 연결 예정이에요 🦌");
+
+    try {
+      const authUser = await signIn();
+      Alert.alert("로그인 완료", `${authUser.email} 계정으로 로그인되었어요.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Google 로그인 중 오류가 발생했습니다.";
+      Alert.alert("로그인 실패", message);
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    // TODO (Codex): Firebase Auth 로그아웃 — 여기에 signOut() 호출 추가
-    Alert.alert("로그아웃", "로그아웃 기능은 추후 연결 예정이에요.");
+
+    try {
+      await signOut();
+      Alert.alert("로그아웃", "안전하게 로그아웃되었습니다.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "로그아웃 중 오류가 발생했습니다.";
+      Alert.alert("로그아웃 실패", message);
+    }
   };
 
   return (
@@ -46,29 +60,26 @@ export default function SettingsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* 프로필 카드 */}
       <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={[styles.avatar, { backgroundColor: colors.primary + "28" }]}>
+        <View style={[styles.avatar, { backgroundColor: colors.primary + "28" }]}> 
           <Text style={styles.avatarText}>🦌</Text>
         </View>
         <View style={styles.profileInfo}>
           <Text style={[styles.profileName, { color: colors.text }]}>{settingsData.name}</Text>
-          <Text style={[styles.profileEmail, { color: colors.textSub }]}>{settingsData.email}</Text>
+          <Text style={[styles.profileEmail, { color: colors.textSub }]}>{user?.email ?? settingsData.email}</Text>
         </View>
       </View>
 
-      {/* Google 로그인 */}
       <TouchableOpacity
         style={[styles.googleBtn, { borderColor: colors.border }]}
         onPress={handleGoogleLogin}
         activeOpacity={0.8}
       >
         <Feather name="log-in" size={18} color={colors.secondary} />
-        <Text style={[styles.googleBtnText, { color: colors.secondary }]}>Google로 로그인</Text>
-        <Text style={[styles.googleBtnSub, { color: colors.textSub }]}>추후 연결 예정</Text>
+        <Text style={[styles.googleBtnText, { color: colors.secondary }]}>{user ? "Google 로그인 완료" : "Google로 로그인"}</Text>
+        <Text style={[styles.googleBtnSub, { color: colors.textSub }]}>{user ? "Firebase Auth 연동됨" : "Development Build 필요"}</Text>
       </TouchableOpacity>
 
-      {/* 설정 목록 */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.settingRow}>
           <View style={styles.settingLeft}>
@@ -82,32 +93,8 @@ export default function SettingsScreen() {
           </View>
           <Switch value={notifEnabled} onValueChange={setNotifEnabled} trackColor={{ false: colors.border, true: colors.primary }} thumbColor="#FFFFFF" />
         </View>
-        <View style={[styles.separator, { backgroundColor: colors.border }]} />
-        <View style={styles.settingRow}>
-          <View style={styles.settingLeft}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.positive + "18" }]}>
-              <Feather name="cloud" size={16} color={colors.positive} />
-            </View>
-            <View>
-              <Text style={[styles.settingLabel, { color: colors.text }]}>데이터 동기화</Text>
-              <Text style={[styles.settingValue, { color: colors.textSub }]}>{settingsData.syncStatus}</Text>
-            </View>
-          </View>
-          <Feather name="chevron-right" size={18} color={colors.border} />
-        </View>
-        <View style={[styles.separator, { backgroundColor: colors.border }]} />
-        <View style={styles.settingRow}>
-          <View style={styles.settingLeft}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.muted }]}>
-              <Feather name="info" size={16} color={colors.textSub} />
-            </View>
-            <Text style={[styles.settingLabel, { color: colors.text }]}>앱 버전</Text>
-          </View>
-          <Text style={[styles.settingValue, { color: colors.textSub }]}>{settingsData.appVersion}</Text>
-        </View>
       </View>
 
-      {/* 로그아웃 */}
       <TouchableOpacity
         style={[styles.logoutBtn, { backgroundColor: colors.destructive + "12", borderColor: colors.destructive + "30" }]}
         onPress={handleLogout}
@@ -143,7 +130,6 @@ const styles = StyleSheet.create({
   settingIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   settingLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   settingValue: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  separator: { height: 1, marginHorizontal: 16 },
   logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, padding: 16, borderWidth: 1, minHeight: 52, marginTop: 4 },
   logoutText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   footer: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, marginBottom: 4 },
