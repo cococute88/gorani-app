@@ -1,0 +1,55 @@
+import { initializeApp, getApps, getApp, type FirebaseApp, type FirebaseOptions } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getDatabase, type Database } from "firebase/database";
+
+let cachedApp: FirebaseApp | null = null;
+let cachedAuth: Auth | null = null;
+let cachedDb: Database | null = null;
+
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Firebase 설정값 누락: ${name}. README의 Firebase 설정 단계를 확인해 주세요.`);
+  }
+  return value;
+}
+
+function getFirebaseConfig(): FirebaseOptions {
+  return {
+    apiKey: requiredEnv("EXPO_PUBLIC_FIREBASE_API_KEY"),
+    authDomain: requiredEnv("EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN"),
+    databaseURL: requiredEnv("EXPO_PUBLIC_FIREBASE_DATABASE_URL"),
+    projectId: requiredEnv("EXPO_PUBLIC_FIREBASE_PROJECT_ID"),
+    storageBucket: requiredEnv("EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET"),
+    messagingSenderId: requiredEnv("EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
+    appId: requiredEnv("EXPO_PUBLIC_FIREBASE_APP_ID"),
+  };
+}
+
+export function getFirebaseApp(): FirebaseApp {
+  if (cachedApp) {
+    return cachedApp;
+  }
+
+  const app = getApps().length > 0 ? getApp() : initializeApp(getFirebaseConfig());
+  cachedApp = app;
+  return app;
+}
+
+export function getFirebaseAuth(): Auth {
+  if (cachedAuth) {
+    return cachedAuth;
+  }
+
+  cachedAuth = getAuth(getFirebaseApp());
+  return cachedAuth;
+}
+
+export function getFirebaseDb(): Database {
+  if (cachedDb) {
+    return cachedDb;
+  }
+
+  cachedDb = getDatabase(getFirebaseApp());
+  return cachedDb;
+}

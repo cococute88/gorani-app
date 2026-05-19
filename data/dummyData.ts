@@ -154,6 +154,34 @@ export const assetMonthlyData: AssetMonthly[] = [
   },
 ];
 
+
+
+// ── 워치리스트/자산 계정 타입(컴포넌트 호환용) ─────────────────────────
+export type StockStatus = "보유중" | "매수 검토중" | "관망";
+
+export interface WatchlistItem {
+  id: string;
+  ticker: string;
+  name: string;
+  targetBuy?: number;
+  targetSell?: number;
+  memo?: string;
+  status: StockStatus;
+  alertTargetPrice: boolean;
+  alertDividend: boolean;
+  alertMemo: boolean;
+}
+
+export type AssetAccountType = "stock" | "cash" | "bond";
+
+export interface AssetAccount {
+  id: string;
+  name: string;
+  type: AssetAccountType;
+  balance: number;
+  memo?: string;
+}
+
 // ── 시뮬레이터 ───────────────────────────────────────────────────
 export const simulatorConfig = {
   startYear: 2024,
