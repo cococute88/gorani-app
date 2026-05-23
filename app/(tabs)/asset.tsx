@@ -423,11 +423,81 @@ export default function AssetScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          {selectedSliceKey && (
+            <SelectedItemPeriodDetail
+              selectedKey={selectedSliceKey}
+              stackedData={stackedData}
+              trackerMonthlyData={trackerMonthlyData}
+            />
+          )}
         </View>
       </View>
     </ScrollView>
   );
 }
+
+function SelectedItemPeriodDetail({
+  selectedKey,
+  stackedData,
+  trackerMonthlyData,
+}: {
+  selectedKey: string;
+  stackedData: StackDatum[];
+  trackerMonthlyData: AssetMonthly[];
+}) {
+  const colors = useColors();
+  const rows = stackedData.map((datum, idx) => {
+    const amount = datum.values[selectedKey] ?? 0;
+    const totalAsset = trackerMonthlyData[idx]?.totalAsset ?? 0;
+    const ratio = totalAsset > 0 ? (amount / totalAsset) * 100 : 0;
+    return { label: datum.label, amount, ratio };
+  });
+
+  if (rows.length === 0 || rows.every((r) => r.amount === 0)) {
+    return (
+      <View style={detailStyles.container}>
+        <Text style={[detailStyles.title, { color: colors.text }]}>선택 항목 기간별 상세</Text>
+        <Text style={[detailStyles.emptyText, { color: colors.textSub }]}>선택 항목의 기간별 데이터가 없어요</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={detailStyles.container}>
+      <Text style={[detailStyles.title, { color: colors.text }]}>선택 항목 기간별 상세</Text>
+      <Text style={[detailStyles.subtitle, { color: colors.textSub }]}>각 월 총자산 대비 비중이에요</Text>
+      <View style={[detailStyles.headerRow, { borderBottomColor: colors.border }]}>
+        <Text style={[detailStyles.headerCell, { color: colors.textSub, flex: 1 }]}>기간</Text>
+        <Text style={[detailStyles.headerCell, { color: colors.textSub, flex: 1.2, textAlign: "right" }]}>금액</Text>
+        <Text style={[detailStyles.headerCell, { color: colors.textSub, flex: 0.8, textAlign: "right" }]}>비중</Text>
+      </View>
+      <ScrollView style={detailStyles.scroll} nestedScrollEnabled showsVerticalScrollIndicator>
+        {rows.map((row, i) => (
+          <View
+            key={row.label}
+            style={[detailStyles.row, { borderTopColor: colors.border, backgroundColor: i % 2 === 0 ? "transparent" : colors.muted + "30" }]}
+          >
+            <Text style={[detailStyles.cell, { color: colors.secondary, flex: 1 }]}>{row.label}</Text>
+            <Text style={[detailStyles.cell, { color: colors.text, flex: 1.2, textAlign: "right" }]}>{formatCompactAssetAmount(row.amount)}</Text>
+            <Text style={[detailStyles.cell, { color: colors.textSub, flex: 0.8, textAlign: "right" }]}>{row.ratio.toFixed(1)}%</Text>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const detailStyles = StyleSheet.create({
+  container: { marginTop: 12, gap: 4 },
+  title: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  subtitle: { fontSize: 10, fontFamily: "Inter_400Regular", marginBottom: 4 },
+  emptyText: { fontSize: 11, fontFamily: "Inter_400Regular", paddingVertical: 8 },
+  headerRow: { flexDirection: "row", paddingVertical: 6, borderBottomWidth: 1, paddingHorizontal: 4 },
+  headerCell: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  scroll: { maxHeight: 200 },
+  row: { flexDirection: "row", paddingVertical: 6, borderTopWidth: 1, paddingHorizontal: 4 },
+  cell: { fontSize: 11, fontFamily: "Inter_400Regular" },
+});
 
 function getCategoryBreakdown(data: AssetMonthly): BreakdownItem[] {
   return sortBreakdownItems(data.tags.map((tag) => ({

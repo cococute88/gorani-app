@@ -1,5 +1,7 @@
-﻿import React, { memo, useCallback, useMemo, useState } from "react";
+﻿import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   ScrollView,
@@ -11,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { CALENDAR_EVENT_COLORS, CalendarGrid } from "@/components/CalendarGrid";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -18,6 +21,11 @@ import { TAB_BAR_SAFE_BOTTOM } from "@/constants/layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useDividendCalendarQuery } from "@/hooks/useRtdbData";
 import { normalizeDividendCalendar } from "@/utils/normalizeDividendCalendar";
+import {
+  isRefreshEndpointConfigured,
+  refreshDividendCalendar,
+} from "@/services/refreshDividendCalendar";
+import { writeTickerMemo } from "@/services/rtdbCalendarMemoService";
 import {
   CalendarEvent,
   EventType,
@@ -61,6 +69,34 @@ const SCROLL_TEST_EVENTS: CalendarEvent[] = [
   { id: "cal-extra-8", portfolioName: "기타", ticker: "메모", eventType: "custom", date: "2026-12-16", shortLabel: "연말체크", memo: "연말 리밸런싱", customTitle: "연말 체크", star: false, heart: false, alertEnabled: false, status: "declared" },
 ];
 
+/**
+ * Firebase의 dividend_calendar 원본 객체에서 ticker별 메모 map을 추출.
+ * - 경로: dividend_calendar.memos.{TICKER}
+ * - ticker는 대문자로 정규화
+ * - "_EMPTY_DICT_"/"_EMPTY_"/빈 문자열 placeholder는 무시
+ * - memos가 없거나 형식이 이상하면 빈 객체 반환
+ */
+function extractFirebaseTickerMemos(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const memosNode = (raw as Record<string, unknown>).memos;
+  if (!memosNode || typeof memosNode !== "object" || Array.isArray(memosNode)) {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  Object.entries(memosNode as Record<string, unknown>).forEach(([key, value]) => {
+    if (!key) return;
+    if (typeof value !== "string") return;
+    const upperKey = key.trim().toUpperCase();
+    if (!upperKey || upperKey === "_EMPTY_DICT_" || upperKey === "_EMPTY_") return;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "_EMPTY_DICT_" || trimmed === "_EMPTY_") return;
+    result[upperKey] = trimmed;
+  });
+  return result;
+}
+
 export default function CalendarScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -68,6 +104,10 @@ export default function CalendarScreen() {
   const dividendCalendarQuery = useDividendCalendarQuery(user?.email);
   const firebaseCalendarEvents = useMemo(
     () => normalizeDividendCalendar(dividendCalendarQuery.data),
+    [dividendCalendarQuery.data],
+  );
+  const firebaseTickerMemos = useMemo(
+    () => extractFirebaseTickerMemos(dividendCalendarQuery.data),
     [dividendCalendarQuery.data],
   );
   const hasLoginEmail = Boolean(user?.email);
@@ -100,6 +140,9 @@ export default function CalendarScreen() {
   const [removeTicker, setRemoveTicker] = useState("");
   const [removeSearch, setRemoveSearch] = useState("");
   const [newTicker, setNewTicker] = useState("");
+  const [isRefreshingCalendar, setIsRefreshingCalendar] = useState(false);
+  const [isSavingMemo, setIsSavingMemo] = useState(false);
+  const queryClient = useQueryClient();
   const [scope, setScope] = useState<MonthScope>("month");
   const [allScheduleVisibleCount, setAllScheduleVisibleCount] = useState(SCHEDULE_PAGE_SIZE);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "date", dir: "asc" });
@@ -121,8 +164,10 @@ export default function CalendarScreen() {
     ) as Record<string, EventMark>;
   });
   const [tickerMemoDrafts, setTickerMemoDrafts] = useState<Record<string, string>>(() => {
-    return Object.fromEntries(portfolioTickers.map((ticker) => [ticker.ticker, ticker.memo])) as Record<string, string>;
+    return Object.fromEntries(portfolioTickers.map((ticker) => [ticker.ticker.toUpperCase(), ticker.memo])) as Record<string, string>;
   });
+  // 사용자가 모달에서 직접 편집한 ticker는 Firebase 값으로 덮어쓰지 않기 위한 ref
+  const userEditedTickersRef = useRef<Set<string>>(new Set());
   const [customMemoDrafts, setCustomMemoDrafts] = useState<Record<string, string>>(() => {
     return Object.fromEntries(
       [...calendarEvents, ...SCROLL_TEST_EVENTS]
@@ -234,6 +279,56 @@ export default function CalendarScreen() {
     });
   }, [displayEvents, isUsingFirebaseCalendar, managedTickers, taxInfoByTicker, tickerEventCounts]);
 
+  // 캘린더 설정 모달이 사용하는 전체 ticker universe.
+  // - taxSummaryTickers (Firebase 일정 기반, "종목별 1회 예상 절세액" 영역과 동일 source)
+  // - 사용자가 Add Ticker로 직접 등록한 managedTickers (taxSummary에 없는 ticker만 보충)
+  // - dividend_calendar.memos에서 ticker별 기존 메모 hydrate
+  // - 두 source 병합 시 절세액/메모를 0/빈값으로 덮어쓰지 않음
+  const unifiedManagerTickers = useMemo(() => {
+    const tickerMap = new Map<string, PortfolioTicker>();
+
+    // 1순위: taxSummary (Firebase 기반) — 절세액/관련 이벤트 수의 canonical source
+    taxSummaryTickers.forEach((ticker) => {
+      const upperTicker = ticker.ticker.toUpperCase();
+      tickerMap.set(upperTicker, { ...ticker, ticker: upperTicker });
+    });
+
+    // 2순위: managedTickers — taxSummary에 없는 ticker만 보충
+    managedTickers.forEach((ticker) => {
+      const upperTicker = ticker.ticker.toUpperCase();
+      if (!tickerMap.has(upperTicker)) {
+        tickerMap.set(upperTicker, { ...ticker, ticker: upperTicker });
+      }
+    });
+
+    // 메모 hydrate: Firebase memos가 있으면 우선 사용 (기존 sector/category는 유지)
+    const result: PortfolioTicker[] = Array.from(tickerMap.values()).map((ticker) => {
+      const upperTicker = ticker.ticker;
+      const firebaseMemo = firebaseTickerMemos[upperTicker];
+      const hydratedMemo = firebaseMemo && firebaseMemo.length > 0 ? firebaseMemo : ticker.memo ?? "";
+      return { ...ticker, memo: hydratedMemo };
+    });
+
+    return result.sort((a, b) => a.ticker.localeCompare(b.ticker));
+  }, [firebaseTickerMemos, managedTickers, taxSummaryTickers]);
+
+  // 모달의 선택 ticker card가 사용할 절세액 map.
+  // "종목별 1회 예상 절세액" 영역과 동일하게 taxInfoByTicker → fallback 순.
+  const tickerSavingOnceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    unifiedManagerTickers.forEach((ticker) => {
+      const upperTicker = ticker.ticker;
+      const fromTaxInfo = taxInfoByTicker.get(upperTicker)?.savingOnce;
+      if (typeof fromTaxInfo === "number" && fromTaxInfo > 0) {
+        map.set(upperTicker, fromTaxInfo);
+        return;
+      }
+      const fallback = getTickerTaxInfo(upperTicker, undefined, undefined, !isUsingFirebaseCalendar).savingOnce;
+      map.set(upperTicker, fallback);
+    });
+    return map;
+  }, [isUsingFirebaseCalendar, taxInfoByTicker, unifiedManagerTickers]);
+
   const tableEvents = useMemo(() => {
     const scoped = scope === "month" ? visibleMonthEvents : visibleDisplayEvents;
     return [...scoped]
@@ -270,6 +365,25 @@ export default function CalendarScreen() {
     }
     setSelectedDate(null);
   };
+
+  // Firebase의 dividend_calendar.memos를 ticker별 메모 draft에 hydrate.
+  // - 사용자가 모달에서 직접 편집한 ticker는 덮어쓰지 않음 (userEditedTickersRef로 보호)
+  // - Firebase에 메모가 있는데 draft가 비어 있으면 채워줌
+  useEffect(() => {
+    const memoEntries = Object.entries(firebaseTickerMemos);
+    if (memoEntries.length === 0) return;
+    setTickerMemoDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      memoEntries.forEach(([upperTicker, memoValue]) => {
+        if (userEditedTickersRef.current.has(upperTicker)) return;
+        if (next[upperTicker] === memoValue) return;
+        next[upperTicker] = memoValue;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [firebaseTickerMemos]);
 
   const handleScopeChange = useCallback((nextScope: MonthScope) => {
     setScope((current) => current === nextScope ? current : nextScope);
@@ -321,7 +435,8 @@ export default function CalendarScreen() {
       .map((ticker) => ticker.trim().toUpperCase())
       .filter((ticker) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker));
     if (candidates.length === 0) return;
-    const existing = new Set(managedTickers.map((item) => item.ticker));
+    // 중복 검사는 통합 ticker universe(Firebase + 로컬) 기준으로
+    const existing = new Set(unifiedManagerTickers.map((item) => item.ticker));
     const unique = Array.from(new Set(candidates)).filter((ticker) => !existing.has(ticker));
     if (unique.length === 0) {
       setNewTicker("");
@@ -341,7 +456,7 @@ export default function CalendarScreen() {
     setManagedTickers((prev) => [...prev, ...nextTickers]);
     setTickerMemoDrafts((prev) => ({
       ...prev,
-      ...Object.fromEntries(unique.map((ticker) => [ticker, ""])),
+      ...Object.fromEntries(unique.map((ticker) => [ticker.toUpperCase(), ""])),
     }));
     setSelectedManagerTicker(unique[0]);
     setRemoveTicker("");
@@ -359,6 +474,91 @@ export default function CalendarScreen() {
       return next;
     });
   };
+
+  const handleRefreshCalendar = useCallback(async () => {
+    if (isRefreshingCalendar) return;
+    if (!hasLoginEmail) {
+      Alert.alert("일정 최신화", "로그인 후 사용할 수 있어요.");
+      return;
+    }
+
+    setIsRefreshingCalendar(true);
+    try {
+      const result = await refreshDividendCalendar(user?.email);
+      if (result.ok) {
+        await queryClient.invalidateQueries({
+          queryKey: ["rtdb", "dividend_calendar", user?.email],
+        });
+        Alert.alert(
+          "일정 최신화 완료",
+          result.updated !== undefined
+            ? `최신화된 일정 ${result.updated}건을 적용했어요.`
+            : (result.message ?? "최신화가 완료되었습니다."),
+        );
+      } else {
+        Alert.alert("일정 최신화", result.message);
+        if (result.reason === "server" || result.reason === "unknown" || result.reason === "network") {
+          console.warn("[refreshDividendCalendar]", result);
+        }
+      }
+    } catch (error) {
+      console.error("[refreshDividendCalendar] unexpected", error);
+      Alert.alert("일정 최신화", "예상치 못한 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsRefreshingCalendar(false);
+    }
+  }, [hasLoginEmail, isRefreshingCalendar, queryClient, user?.email]);
+
+  // 종목 메모 편집/저장 통합 핸들러.
+  // - ticker key는 항상 대문자
+  // - 사용자가 편집한 ticker를 ref에 기록 → useEffect에서 Firebase로 덮어쓰지 않음
+  // - 로그인 상태이면 Firebase memos/{TICKER}만 직접 업데이트 (다른 ticker 메모 보존)
+  const handleTickerMemoChange = useCallback((rawTicker: string, memoValue: string) => {
+    const upperTicker = (rawTicker ?? "").toUpperCase();
+    if (!upperTicker) return;
+    userEditedTickersRef.current.add(upperTicker);
+    setTickerMemoDrafts((prev) => ({ ...prev, [upperTicker]: memoValue }));
+  }, []);
+
+  // 종목 메모 영구 저장 (Firebase). 로그인하지 않은 경우 저장 시도하지 않음.
+  const persistTickerMemo = useCallback(
+    async (rawTicker: string, memoValue: string) => {
+      if (!hasLoginEmail || !user?.email) return;
+      const upperTicker = (rawTicker ?? "").toUpperCase();
+      if (!upperTicker) return;
+      try {
+        await writeTickerMemo(user.email, upperTicker, memoValue);
+      } catch (error) {
+        console.warn("[writeTickerMemo] failed", upperTicker, error);
+      }
+    },
+    [hasLoginEmail, user?.email],
+  );
+
+  // 모달 "저장" 버튼 핸들러 — 명시적 저장 + 피드백
+  const handleSaveMemo = useCallback(
+    async (rawTicker: string) => {
+      if (!hasLoginEmail || !user?.email) {
+        Alert.alert("저장 불가", "로그인 후 저장할 수 있어요.");
+        return;
+      }
+      const upperTicker = (rawTicker ?? "").toUpperCase();
+      if (!upperTicker) return;
+      const memoValue = tickerMemoDrafts[upperTicker] ?? "";
+      setIsSavingMemo(true);
+      try {
+        await writeTickerMemo(user.email, upperTicker, memoValue);
+        userEditedTickersRef.current.delete(upperTicker);
+        Alert.alert("저장 완료", `${upperTicker} 종목 메모가 저장되었습니다.`);
+      } catch (error) {
+        console.error("[handleSaveMemo] failed", upperTicker, error);
+        Alert.alert("저장 실패", "메모 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      } finally {
+        setIsSavingMemo(false);
+      }
+    },
+    [hasLoginEmail, tickerMemoDrafts, user?.email],
+  );
 
   const selectedCustomEvent = useMemo(
     () => selectedDate
@@ -412,10 +612,29 @@ export default function CalendarScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.pageHeaderRow}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.text }]}>투자 캘린더</Text>
           <Text style={[styles.subtitle, { color: colors.textSub }]}>배당, 실적, 개인 메모 일정을 함께 봐요 · {calendarSourceText}</Text>
         </View>
+        <TouchableOpacity
+          onPress={handleRefreshCalendar}
+          disabled={isRefreshingCalendar}
+          style={[
+            styles.manageBtn,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              opacity: isRefreshingCalendar ? 0.5 : 1,
+              marginRight: 6,
+            },
+          ]}
+        >
+          {isRefreshingCalendar ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Feather name="refresh-cw" size={16} color={colors.primary} />
+          )}
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setShowTickerManager(true)}
           style={[styles.manageBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -424,20 +643,40 @@ export default function CalendarScreen() {
         </TouchableOpacity>
       </View>
 
+      {!isRefreshEndpointConfigured() && (
+        <View
+          style={[
+            styles.refreshHint,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <Feather name="info" size={13} color={colors.textSub} />
+          <Text style={[styles.refreshHintText, { color: colors.textSub }]}>
+            일정 최신화 backend가 아직 연결되지 않았어요. 환경변수 EXPO_PUBLIC_DIVIDEND_REFRESH_ENDPOINT를 설정하면 활성화됩니다.
+          </Text>
+        </View>
+      )}
+
       <TickerManagerModal
         visible={showTickerManager}
-        tickers={managedTickers}
+        tickers={unifiedManagerTickers}
         selectedTicker={selectedManagerTicker}
         removeTicker={removeTicker}
         removeSearch={removeSearch}
         newTicker={newTicker}
         tickerMemoDrafts={tickerMemoDrafts}
+        tickerSavingOnceMap={tickerSavingOnceMap}
+        isSavingMemo={isSavingMemo}
+        hasLoginEmail={hasLoginEmail}
         onClose={() => setShowTickerManager(false)}
         onSelectTicker={setSelectedManagerTicker}
         onSelectRemoveTicker={setRemoveTicker}
         onChangeRemoveSearch={setRemoveSearch}
         onChangeNewTicker={setNewTicker}
-        onChangeTickerMemo={(ticker, memo) => setTickerMemoDrafts((prev) => ({ ...prev, [ticker]: memo }))}
+        onChangeTickerMemo={(ticker, memo) => {
+          handleTickerMemoChange(ticker, memo);
+        }}
+        onSaveMemo={(ticker) => { void handleSaveMemo(ticker); }}
         onAddTicker={handleAddTicker}
         onRemoveTicker={handleRemoveTicker}
       />
@@ -611,7 +850,10 @@ export default function CalendarScreen() {
                             <Text style={[styles.editLabel, { color: colors.textSub }]}>종목 메모</Text>
                             <TextInput
                               value={memo}
-                              onChangeText={(text) => setTickerMemoDrafts((prev) => ({ ...prev, [event.ticker]: text }))}
+                              onChangeText={(text) => {
+                                handleTickerMemoChange(event.ticker, text);
+                                void persistTickerMemo(event.ticker, text);
+                              }}
                               placeholder="종목 메모"
                               placeholderTextColor={colors.textSub}
                               style={[styles.editInput, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
@@ -678,11 +920,11 @@ export default function CalendarScreen() {
 
         <View style={[styles.tableCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}>
-            <SortHeader label="날짜" sortKey="date" current={sort} onPress={toggleSort} flex={1.35} />
-            <SortHeader label="티커" sortKey="ticker" current={sort} onPress={toggleSort} flex={1} />
-            <SortHeader label="타입" sortKey="eventType" current={sort} onPress={toggleSort} flex={1.25} />
-            <Text style={[styles.th, { color: colors.textSub, flex: 1.1, textAlign: "right" }]}>배당금</Text>
-            <Text style={[styles.th, { color: colors.textSub, flex: 1.1, textAlign: "center" }]}>관리</Text>
+            <SortHeader label="날짜" sortKey="date" current={sort} onPress={toggleSort} flex={1.2} />
+            <SortHeader label="티커" sortKey="ticker" current={sort} onPress={toggleSort} flex={1.45} />
+            <SortHeader label="타입" sortKey="eventType" current={sort} onPress={toggleSort} flex={0.9} />
+            <Text style={[styles.th, { color: colors.textSub, flex: 1.1, textAlign: "center" }]}>배당금</Text>
+            <Text style={[styles.th, { color: colors.textSub, flex: 1, textAlign: "center" }]}>관리</Text>
           </View>
           <ScrollView style={[styles.tableScroll, scope === "all" && styles.tableScrollAll]} nestedScrollEnabled>
             {renderedTableEvents.length > 0 ? (
@@ -830,7 +1072,8 @@ function getSharedMemo(event: CalendarEvent, tickerMemoMap: Record<string, strin
   if (event.eventType === "custom") {
     return event.customMemo ?? event.memo ?? event.customTitle ?? event.shortLabel;
   }
-  return tickerMemoMap[event.ticker] ?? event.tickerMemo ?? event.memo ?? "";
+  const upperTicker = event.ticker.toUpperCase();
+  return tickerMemoMap[upperTicker] ?? tickerMemoMap[event.ticker] ?? event.tickerMemo ?? event.memo ?? "";
 }
 
 function getTickerStatus(events: CalendarEvent[]) {
@@ -892,12 +1135,16 @@ function TickerManagerModal({
   removeSearch,
   newTicker,
   tickerMemoDrafts,
+  tickerSavingOnceMap,
+  isSavingMemo,
+  hasLoginEmail,
   onClose,
   onSelectTicker,
   onSelectRemoveTicker,
   onChangeRemoveSearch,
   onChangeNewTicker,
   onChangeTickerMemo,
+  onSaveMemo,
   onAddTicker,
   onRemoveTicker,
 }: {
@@ -908,12 +1155,16 @@ function TickerManagerModal({
   removeSearch: string;
   newTicker: string;
   tickerMemoDrafts: Record<string, string>;
+  tickerSavingOnceMap: Map<string, number>;
+  isSavingMemo: boolean;
+  hasLoginEmail: boolean;
   onClose: () => void;
   onSelectTicker: (ticker: string) => void;
   onSelectRemoveTicker: (ticker: string) => void;
   onChangeRemoveSearch: (query: string) => void;
   onChangeNewTicker: (ticker: string) => void;
   onChangeTickerMemo: (ticker: string, memo: string) => void;
+  onSaveMemo: (ticker: string) => void;
   onAddTicker: () => void;
   onRemoveTicker: () => void;
 }) {
@@ -977,15 +1228,30 @@ function TickerManagerModal({
                 <View style={styles.managerSummaryTop}>
                   <Text style={[styles.managerSummaryTicker, { color: colors.secondary }]}>{selected.ticker}</Text>
                   <Text style={[styles.managerSummaryTax, { color: colors.text }]}>
-                    {getTickerTaxInfo(selected.ticker).savingOnce.toFixed(1)}
+                    {(tickerSavingOnceMap.get(selected.ticker) ?? getTickerTaxInfo(selected.ticker).savingOnce).toFixed(1)}
                   </Text>
                   <View style={[styles.managerSectorBadge, { backgroundColor: colors.muted }]}>
                     <Text style={[styles.managerSummarySector, { color: colors.textSub }]}>{selected.sector}</Text>
                   </View>
+                  <TouchableOpacity
+                    onPress={() => onSaveMemo(selected.ticker)}
+                    disabled={isSavingMemo || !hasLoginEmail}
+                    style={[
+                      styles.memoSaveBtn,
+                      {
+                        backgroundColor: hasLoginEmail && !isSavingMemo ? "#E8D5A3" : colors.muted,
+                        opacity: isSavingMemo ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.memoSaveBtnText, { color: hasLoginEmail ? "#5C4A2A" : colors.textSub }]}>
+                      {isSavingMemo ? "..." : "저장"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
                 <Text style={[styles.managerLabel, { color: colors.textSub }]}>종목 메모</Text>
                 <TextInput
-                  value={tickerMemoDrafts[selected.ticker] ?? selected.memo}
+                  value={tickerMemoDrafts[selected.ticker] ?? selected.memo ?? ""}
                   onChangeText={(memo) => onChangeTickerMemo(selected.ticker, memo)}
                   placeholder="종목 메모"
                   placeholderTextColor={colors.textSub}
@@ -1061,7 +1327,7 @@ function SortHeader({
   const mark = current.key === sortKey ? (current.dir === "asc" ? "↑" : "↓") : "";
   return (
     <TouchableOpacity onPress={() => onPress(sortKey)} style={{ flex }}>
-      <Text style={[styles.th, { color: current.key === sortKey ? colors.secondary : colors.textSub }]}>
+      <Text style={[styles.th, { color: current.key === sortKey ? colors.secondary : colors.textSub, textAlign: "center" }]}>
         {label}{mark}
       </Text>
     </TouchableOpacity>
@@ -1085,17 +1351,17 @@ const EventListRow = memo(function EventListRow({
         { borderTopColor: colors.border, backgroundColor: isEstimated ? "#F3F1EC" : colors.card },
       ]}
     >
-      <Text style={[styles.td, { color: colors.textSub, flex: 1.35 }]}>{event.date.slice(5).replace("-", "/")}</Text>
-      <Text style={[styles.td, { color: colors.secondary, flex: 1, fontFamily: "Inter_700Bold" }]} numberOfLines={1}>{formatMarkedTicker(event)}</Text>
-      <View style={{ flex: 1.25 }}>
+      <Text style={[styles.td, { color: colors.textSub, flex: 1.2, textAlign: "center", paddingLeft: 4 }]}>{event.date.slice(2)}</Text>
+      <Text style={[styles.td, { color: colors.secondary, flex: 1.45, fontFamily: "Inter_700Bold" }]} numberOfLines={1}>{formatMarkedTicker(event)}</Text>
+      <View style={{ flex: 0.9, alignItems: "center" }}>
         <View style={[styles.typePill, { backgroundColor: CALENDAR_EVENT_COLORS[event.eventType] + "22" }]}>
           <Text style={[styles.typeText, { color: CALENDAR_EVENT_COLORS[event.eventType] }]}>{TYPE_LABELS[event.eventType]}</Text>
         </View>
       </View>
-      <Text style={[styles.td, { color: colors.text, flex: 1.1, textAlign: "right" }]}>
+      <Text style={[styles.td, { color: colors.text, flex: 1.1, textAlign: "center", paddingRight: 4 }]}>
         {event.dividendAmount ? `$${event.dividendAmount.toFixed(2)}` : "-"}
       </Text>
-      <View style={[styles.rowIcons, { flex: 1.1 }]}>
+      <View style={[styles.rowIcons, { flex: 1 }]}>
         <TouchableOpacity onPress={() => onToggleMark(event.id, "star")} hitSlop={8}>
           <Feather name="star" size={12} color={event.star ? "#F5B731" : colors.border} />
         </TouchableOpacity>
@@ -1117,6 +1383,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontFamily: "Inter_700Bold" },
   subtitle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 3 },
   manageBtn: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  refreshHint: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  refreshHintText: { flex: 1, fontSize: 11, lineHeight: 15, fontFamily: "Inter_400Regular" },
   calCard: {
     borderRadius: 16, paddingHorizontal: 6, paddingVertical: 10, borderWidth: 1,
     shadowColor: "#3D2B1F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
@@ -1184,7 +1452,7 @@ const styles = StyleSheet.create({
   removeBtnText: { color: "#FFF", fontSize: 12, fontFamily: "Inter_700Bold" },
   addTickerRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
   tickerInput: { flex: 1, height: 36, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  managerMemoInput: { height: 44, paddingVertical: 8, lineHeight: 18 },
+  managerMemoInput: { height: 44, paddingVertical: 8, lineHeight: 16, fontSize: 11 },
   addTickerBtn: { height: 36, paddingHorizontal: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   addTickerText: { color: "#FFF", fontSize: 12, fontFamily: "Inter_700Bold" },
   registeredGrid: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 12 },
@@ -1196,6 +1464,8 @@ const styles = StyleSheet.create({
   managerSummarySector: { fontSize: 11, fontFamily: "Inter_700Bold" },
   managerSummaryTax: { fontSize: 12, fontFamily: "Inter_700Bold" },
   managerSectorBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9 },
+  memoSaveBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  memoSaveBtnText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   removeSection: { marginTop: 16, paddingTop: 12, gap: 8 },
   removeCandidateRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   removeCandidate: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
@@ -1242,9 +1512,9 @@ const styles = StyleSheet.create({
   tableMoreBtn: { minHeight: 34, borderRadius: 10, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   tableMoreText: { fontSize: 12, fontFamily: "Inter_700Bold" },
   th: { fontSize: 10, fontFamily: "Inter_700Bold" },
-  tableRow: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, alignItems: "center" },
+  tableRow: { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 10, borderTopWidth: 1, alignItems: "center" },
   td: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  typePill: { alignSelf: "flex-start", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  typeText: { fontSize: 9, fontFamily: "Inter_700Bold" },
+  typePill: { alignSelf: "flex-start", paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6, minWidth: 48 },
+  typeText: { fontSize: 8.5, fontFamily: "Inter_700Bold", textAlign: "center" },
   rowIcons: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
 });

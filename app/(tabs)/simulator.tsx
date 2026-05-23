@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { SectionHeader } from "@/components/SectionHeader";
-import { MiniLineChart } from "@/components/MiniLineChart";
+import { MultiLineChart } from "@/components/MultiLineChart";
 import { TAB_BAR_SAFE_BOTTOM } from "@/constants/layout";
 import { simulatorConfig, formatKRW } from "@/data/dummyData";
 import { useAuth } from "@/hooks/useAuth";
@@ -107,6 +107,10 @@ export default function SimulatorScreen() {
   );
   const [tableSorts, setTableSorts] = useState<Partial<Record<SimTab, TableSort>>>({});
   const [investmentPlanRows, setInvestmentPlanRows] = useState<InvestmentPlanRow[]>(() => createInvestmentPlanRows(simulatorConfig));
+  const [showBalanceDetail, setShowBalanceDetail] = useState(false);
+  const [showDividendDetail, setShowDividendDetail] = useState(false);
+  const [balanceDetailSort, setBalanceDetailSort] = useState<TableSort>({ column: null, direction: null });
+  const [dividendDetailSort, setDividendDetailSort] = useState<TableSort>({ column: null, direction: null });
 
   useEffect(() => {
     setCfg(boundConfig);
@@ -362,43 +366,117 @@ export default function SimulatorScreen() {
       {/* 탭 내용 */}
       {activeTab === "balance" && (
         <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.chartTitle, { color: colors.text }]}>잔고 추이 (명목 vs 실질)</Text>
-          <MiniLineChart
-            data={res.balanceTrend.map((d) => ({ label: String(d.year), value: d.nominal, value2: d.real }))}
-            label1="명목 잔고"
-            label2="실질 잔고"
-            color1={colors.positive}
-            color2={colors.primary}
-            height={130}
+          <Text style={[styles.chartTitle, { color: colors.text }]}>잔고 추이 (절세 / 위탁 / 합산)</Text>
+          <MultiLineChart
+            labels={res.balanceTrend.map((d) => String(d.year))}
+            series={[
+              { key: "taxNom", label: "절세전체잔고(명목)", color: "#2F80ED", values: res.balanceTrend.map((d) => d.nominal) },
+              { key: "taxReal", label: "절세전체잔고(실질)", color: "#2F80ED", dashed: true, values: res.balanceTrend.map((d) => d.real) },
+              { key: "divNom", label: "배당용위탁잔고(명목)", color: "#219653", values: res.balanceTrend.map((d) => d.divNominal) },
+              { key: "divReal", label: "배당용위탁잔고(실질)", color: "#219653", dashed: true, values: res.balanceTrend.map((d) => d.divReal) },
+              { key: "combNom", label: "합산 명목 잔고(절세+위탁)", color: "#8A5CF6", values: res.balanceTrend.map((d) => d.combinedNominal) },
+              { key: "combReal", label: "합산 실질 잔고(절세+위탁)", color: "#8A5CF6", dashed: true, values: res.balanceTrend.map((d) => d.combinedReal) },
+            ]}
+            height={160}
             formatValue={(v) => formatKRW(v)}
-            showYAxis
-            yAxisTicks={5}
+            retireIndex={res.balanceTrend.findIndex((d) => d.year === res.kpis.retirementYear)}
           />
+          <TouchableOpacity
+            onPress={() => setShowBalanceDetail((v) => !v)}
+            style={[styles.detailToggleBtn, { backgroundColor: showBalanceDetail ? colors.primary : colors.muted, borderColor: colors.border }]}
+          >
+            <Text style={[styles.detailToggleText, { color: showBalanceDetail ? "#FFF" : colors.textSub }]}>
+              {showBalanceDetail ? "상세보기 닫기" : "상세보기"}
+            </Text>
+          </TouchableOpacity>
+          {showBalanceDetail && (
+            <View style={styles.detailTableWrap}>
+              <ScrollView horizontal showsHorizontalScrollIndicator>
+                <View>
+                  <View style={[styles.wideHeader, { borderBottomColor: colors.border }]}>
+                    <WideSortHeader label="연도" column="year" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "year"))} width={48} />
+                    <WideSortHeader label="절세명목" column="nominal" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "nominal"))} />
+                    <WideSortHeader label="절세실질" column="real" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "real"))} />
+                    <WideSortHeader label="위탁명목" column="divNominal" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "divNominal"))} />
+                    <WideSortHeader label="위탁실질" column="divReal" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "divReal"))} />
+                    <WideSortHeader label="합산명목" column="combinedNominal" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "combinedNominal"))} />
+                    <WideSortHeader label="합산실질" column="combinedReal" sort={balanceDetailSort} onPress={() => setBalanceDetailSort((prev) => toggleDetailSort(prev, "combinedReal"))} />
+                  </View>
+                  <ScrollView style={styles.wideTableScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+                    {sortRows(res.balanceTrend, balanceDetailSort).map((row, i) => (
+                      <View key={row.year} style={[styles.wideRow, { borderTopColor: colors.border, backgroundColor: i % 2 === 0 ? "transparent" : colors.muted + "50" }]}>
+                        <Text style={[styles.wideTd, styles.wideTdYear, { color: colors.secondary, fontFamily: "Inter_700Bold" }]}>{row.year}</Text>
+                        <Text style={[styles.wideTd, { color: "#2F80ED" }]}>{formatKRW(row.nominal)}</Text>
+                        <Text style={[styles.wideTd, { color: "#2F80ED" }]}>{formatKRW(row.real)}</Text>
+                        <Text style={[styles.wideTd, { color: "#219653" }]}>{formatKRW(row.divNominal)}</Text>
+                        <Text style={[styles.wideTd, { color: "#219653" }]}>{formatKRW(row.divReal)}</Text>
+                        <Text style={[styles.wideTd, { color: "#8A5CF6", fontFamily: "Inter_600SemiBold" }]}>{formatKRW(row.combinedNominal)}</Text>
+                        <Text style={[styles.wideTd, { color: "#8A5CF6", fontFamily: "Inter_600SemiBold" }]}>{formatKRW(row.combinedReal)}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+            </View>
+          )}
         </View>
       )}
 
       {activeTab === "dividend" && (
         <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.chartTitle, { color: colors.text }]}>배당금 추이 (월 수익)</Text>
-          <MiniLineChart
-            data={res.dividendTrend.map((d) => ({ label: String(d.year), value: d.pensionMonthly, value2: d.brokerageMonthly }))}
-            label1="연금"
-            label2="위탁"
-            color1={colors.primary}
-            color2={colors.positive}
-            height={128}
-            formatValue={(v) => `${(v / 10000).toFixed(0)}만`}
-            showYAxis
-            yAxisTicks={5}
+          <MultiLineChart
+            labels={res.dividendTrend.map((d) => String(d.year))}
+            series={[
+              { key: "penNom", label: "절세 월인출금(명목)", color: "#2F80ED", values: res.dividendTrend.map((d) => d.pensionMonthly) },
+              { key: "penReal", label: "절세 월인출금(실질)", color: "#2F80ED", dashed: true, values: res.dividendTrend.map((d) => d.pensionMonthlyReal) },
+              { key: "brkNom", label: "위탁 월배당금(명목)", color: "#219653", values: res.dividendTrend.map((d) => d.brokerageMonthly) },
+              { key: "brkReal", label: "위탁 월배당금(실질)", color: "#219653", dashed: true, values: res.dividendTrend.map((d) => d.brokerageMonthlyReal) },
+              { key: "totNom", label: "합산 월수익(명목)", color: "#8A5CF6", values: res.dividendTrend.map((d) => d.total) },
+              { key: "totReal", label: "합산 월수익(실질)", color: "#8A5CF6", dashed: true, values: res.dividendTrend.map((d) => d.totalReal) },
+            ]}
+            height={160}
+            formatValue={(v) => formatKRW(v)}
+            retireIndex={res.dividendTrend.findIndex((d) => d.year === res.kpis.retirementYear)}
           />
-          <View style={styles.dividendLegend}>
-            {[{ c: colors.primary, l: "연금" }, { c: colors.positive, l: "위탁" }, { c: colors.secondary, l: "합산" }].map((item, i) => (
-              <View key={i} style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: item.c }]} />
-                <Text style={[styles.legendText, { color: colors.textSub }]}>{item.l}</Text>
-              </View>
-            ))}
-          </View>
+          <TouchableOpacity
+            onPress={() => setShowDividendDetail((v) => !v)}
+            style={[styles.detailToggleBtn, { backgroundColor: showDividendDetail ? colors.primary : colors.muted, borderColor: colors.border }]}
+          >
+            <Text style={[styles.detailToggleText, { color: showDividendDetail ? "#FFF" : colors.textSub }]}>
+              {showDividendDetail ? "상세보기 닫기" : "상세보기"}
+            </Text>
+          </TouchableOpacity>
+          {showDividendDetail && (
+            <View style={styles.detailTableWrap}>
+              <ScrollView horizontal showsHorizontalScrollIndicator>
+                <View>
+                  <View style={[styles.wideHeader, { borderBottomColor: colors.border }]}>
+                    <WideSortHeader label="연도" column="year" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "year"))} width={48} />
+                    <WideSortHeader label="절세명목" column="pensionMonthly" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "pensionMonthly"))} />
+                    <WideSortHeader label="절세실질" column="pensionMonthlyReal" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "pensionMonthlyReal"))} />
+                    <WideSortHeader label="위탁명목" column="brokerageMonthly" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "brokerageMonthly"))} />
+                    <WideSortHeader label="위탁실질" column="brokerageMonthlyReal" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "brokerageMonthlyReal"))} />
+                    <WideSortHeader label="합산명목" column="total" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "total"))} />
+                    <WideSortHeader label="합산실질" column="totalReal" sort={dividendDetailSort} onPress={() => setDividendDetailSort((prev) => toggleDetailSort(prev, "totalReal"))} />
+                  </View>
+                  <ScrollView style={styles.wideTableScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+                    {sortRows(res.dividendTrend, dividendDetailSort).map((row, i) => (
+                      <View key={row.year} style={[styles.wideRow, { borderTopColor: colors.border, backgroundColor: i % 2 === 0 ? "transparent" : colors.muted + "50" }]}>
+                        <Text style={[styles.wideTd, styles.wideTdYear, { color: colors.secondary, fontFamily: "Inter_700Bold" }]}>{row.year}</Text>
+                        <Text style={[styles.wideTd, { color: "#2F80ED" }]}>{formatKRW(row.pensionMonthly)}</Text>
+                        <Text style={[styles.wideTd, { color: "#2F80ED" }]}>{formatKRW(row.pensionMonthlyReal)}</Text>
+                        <Text style={[styles.wideTd, { color: "#219653" }]}>{formatKRW(row.brokerageMonthly)}</Text>
+                        <Text style={[styles.wideTd, { color: "#219653" }]}>{formatKRW(row.brokerageMonthlyReal)}</Text>
+                        <Text style={[styles.wideTd, { color: "#8A5CF6", fontFamily: "Inter_600SemiBold" }]}>{formatKRW(row.total)}</Text>
+                        <Text style={[styles.wideTd, { color: "#8A5CF6", fontFamily: "Inter_600SemiBold" }]}>{formatKRW(row.totalReal)}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+            </View>
+          )}
         </View>
       )}
 
@@ -451,17 +529,17 @@ export default function SimulatorScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View>
               <View style={[styles.wideHeader, { borderBottomColor: colors.border }]}>
-                <WideSortHeader label="연도" column="year" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "year")} />
-                <WideSortHeader label="ISA잔고" column="isaBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "isaBalance")} />
-                <WideSortHeader label="연금저축잔고" column="pensionBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "pensionBalance")} />
-                <WideSortHeader label="일반계좌잔고" column="generalBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "generalBalance")} />
-                <WideSortHeader label="배당계좌잔고" column="dividendBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "dividendBalance")} />
+                <WideSortHeader label="연도" column="year" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "year")} width={48} />
+                <WideSortHeader label="ISA" column="isaBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "isaBalance")} />
+                <WideSortHeader label="연금저축" column="pensionBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "pensionBalance")} />
+                <WideSortHeader label="일반계좌" column="generalBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "generalBalance")} />
+                <WideSortHeader label="배당계좌" column="dividendBalance" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "dividendBalance")} />
                 <WideSortHeader label="합계" column="total" sort={tableSorts.divAccount} onPress={() => toggleTableSort("divAccount", "total")} />
               </View>
               <ScrollView style={styles.wideTableScroll} nestedScrollEnabled showsVerticalScrollIndicator>
                 {divAccountRows.map((row, index) => (
                   <View key={`${row.year}-${index}`} style={[styles.wideRow, { borderTopColor: colors.border, backgroundColor: index % 2 === 0 ? "transparent" : colors.muted + "50" }]}>
-                    <Text style={[styles.wideTd, { color: colors.secondary, fontFamily: "Inter_700Bold" }]}>{row.year}</Text>
+                    <Text style={[styles.wideTd, styles.wideTdYear, { color: colors.secondary, fontFamily: "Inter_700Bold" }]}>{row.year}</Text>
                     <Text style={[styles.wideTd, { color: colors.textSub }]}>{formatKRW(row.isaBalance)}</Text>
                     <Text style={[styles.wideTd, { color: colors.textSub }]}>{formatKRW(row.pensionBalance)}</Text>
                     <Text style={[styles.wideTd, { color: colors.textSub }]}>{formatKRW(row.generalBalance)}</Text>
@@ -624,6 +702,17 @@ function getSimConfigSourceText({
   return "로컬 더미 설정 사용 중";
 }
 
+function toggleDetailSort(prev: TableSort, column: string): TableSort {
+  const nextDirection: SortDirection = prev.column !== column
+    ? "asc"
+    : prev.direction === "asc"
+    ? "desc"
+    : prev.direction === "desc"
+    ? null
+    : "asc";
+  return { column: nextDirection ? column : null, direction: nextDirection };
+}
+
 function sortRows<T>(rows: T[], sort?: TableSort) {
   if (!sort?.column || !sort.direction) return rows;
   const key = sort.column as keyof T;
@@ -669,17 +758,19 @@ function WideSortHeader({
   column,
   sort,
   onPress,
+  width,
 }: {
   label: string;
   column: string;
   sort?: TableSort;
   onPress: () => void;
+  width?: number;
 }) {
   const colors = useColors();
   const active = sort?.column === column && !!sort.direction;
   return (
     <TouchableOpacity onPress={onPress}>
-      <Text style={[styles.wideTh, { color: active ? colors.secondary : colors.textSub }]}>
+      <Text style={[styles.wideTh, width !== undefined ? { width } : null, { color: active ? colors.secondary : colors.textSub }]}>
         {label}{sortMark(sort, column)}
       </Text>
     </TouchableOpacity>
@@ -745,6 +836,9 @@ const styles = StyleSheet.create({
     shadowColor: "#3D2B1F", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
   },
   chartTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  detailToggleBtn: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginTop: 4 },
+  detailToggleText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  detailTableWrap: { marginTop: 8 },
   dividendLegend: { flexDirection: "row", gap: 12 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 7, height: 7, borderRadius: 4 },
@@ -760,8 +854,9 @@ const styles = StyleSheet.create({
   th: { flex: 1, fontSize: 9, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   tr: { minHeight: TABLE_ROW_HEIGHT, flexDirection: "row", paddingHorizontal: 10, paddingVertical: 8, borderTopWidth: 1, alignItems: "center" },
   td: { flex: 1, fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
-  wideHeader: { minHeight: TABLE_HEADER_HEIGHT, flexDirection: "row", paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, alignItems: "center" },
-  wideRow: { minHeight: TABLE_ROW_HEIGHT, flexDirection: "row", paddingHorizontal: 10, paddingVertical: 8, borderTopWidth: 1, alignItems: "center" },
-  wideTh: { width: 92, fontSize: 9, fontFamily: "Inter_700Bold", textAlign: "center" },
-  wideTd: { width: 92, fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
+  wideHeader: { minHeight: TABLE_HEADER_HEIGHT, flexDirection: "row", paddingHorizontal: 4, paddingVertical: 8, borderBottomWidth: 1, alignItems: "center" },
+  wideRow: { minHeight: TABLE_ROW_HEIGHT, flexDirection: "row", paddingHorizontal: 4, paddingVertical: 8, borderTopWidth: 1, alignItems: "center" },
+  wideTh: { width: 64, fontSize: 9, fontFamily: "Inter_700Bold", textAlign: "center", paddingHorizontal: 2 },
+  wideTd: { width: 64, fontSize: 8, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 2 },
+  wideTdYear: { width: 48 },
 });

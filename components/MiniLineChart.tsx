@@ -25,6 +25,7 @@ interface MiniLineChartProps {
   showYAxis?: boolean;
   yAxisTicks?: number;
   showRange?: boolean;
+  noTooltip?: boolean;
 }
 
 export function MiniLineChart({
@@ -42,6 +43,7 @@ export function MiniLineChart({
   showYAxis = false,
   yAxisTicks = 5,
   showRange = true,
+  noTooltip = false,
 }: MiniLineChartProps) {
   const colors = useColors();
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -143,7 +145,7 @@ export function MiniLineChart({
             {points1.map((p, i) => <Circle key={`d1-${i}`} cx={p.x} cy={p.y} r={3.5} fill={c1} />)}
             {points2.map((p, i) => <Circle key={`d2-${i}`} cx={p.x} cy={p.y} r={3.2} fill={c2} />)}
           </Svg>
-          {data.map((pt, i) => {
+          {!noTooltip && data.map((pt, i) => {
             const p = points1[i];
             return (
               <Pressable
@@ -160,7 +162,7 @@ export function MiniLineChart({
               />
             );
           })}
-          {selectedIdx !== null && data[selectedIdx] && (
+          {!noTooltip && selectedIdx !== null && data[selectedIdx] && (
             <View
               pointerEvents="none"
               style={[

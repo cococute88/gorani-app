@@ -231,7 +231,7 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <View>
           <Text style={[styles.date, { color: colors.textSub }]}>{dateStr}</Text>
-          <Text style={[styles.greeting, { color: colors.text }]}>안녕하세요, 고라니님! 🦌</Text>
+          <Text style={[styles.greeting, { color: colors.text }]}>{hasLoginEmail ? "안녕하세요, 고라니님! 🦌" : "비로그인 상태입니다."}</Text>
         </View>
         <View style={styles.topRight}>
           <View style={[styles.marketBadge, { backgroundColor: colors.positive + "20" }]}>

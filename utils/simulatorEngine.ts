@@ -35,15 +35,22 @@ export interface EngineInput {
 
 export interface BalanceTrendRow {
   year: number;
-  nominal: number; // 원
-  real: number; // 원
+  nominal: number; // 원 (절세전체 명목)
+  real: number; // 원 (절세전체 실질)
+  divNominal: number; // 원 (배당위탁 명목)
+  divReal: number; // 원 (배당위탁 실질)
+  combinedNominal: number; // 원 (합산 명목)
+  combinedReal: number; // 원 (합산 실질)
 }
 
 export interface DividendTrendRow {
   year: number;
   pensionMonthly: number; // 원 (월 절세계좌 인출액 - 명목)
+  pensionMonthlyReal: number; // 원 (월 절세계좌 인출액 - 실질)
   brokerageMonthly: number; // 원 (월 위탁 배당금 - 명목)
-  total: number; // 원
+  brokerageMonthlyReal: number; // 원 (월 위탁 배당금 - 실질)
+  total: number; // 원 (합산 명목)
+  totalReal: number; // 원 (합산 실질)
 }
 
 export interface PlanResultRow {
@@ -189,7 +196,9 @@ export function runSimulation(input: EngineInput): EngineOutput {
   const divBalNom: number[] = [];
   const divBalReal: number[] = [];
   const taxMNet: number[] = [];
+  const taxMNetReal: number[] = [];
   const divMNet: number[] = [];
+  const divMNetReal: number[] = [];
 
   const planRowsByYear = new Map<number, WithdrawRow>();
   if (withdrawPlan) {
@@ -232,9 +241,8 @@ export function runSimulation(input: EngineInput): EngineOutput {
     taxBalNom.push(tNom);
     taxBalReal.push(tNom / safeDiscount);
     taxMNet.push(tmNet);
-
-    // 실질 환산은 별도 사용처 없음 (UI 표시 용)
-    void dmReal;
+    taxMNetReal.push(tmNet / safeDiscount);
+    divMNetReal.push(dmReal);
   }
 
   // ── KPI ────────────────────────────────────────────────────────
@@ -248,21 +256,36 @@ export function runSimulation(input: EngineInput): EngineOutput {
   const pensionLimitMan = cfg.initPension + (last?.totalPensionDeposit ?? 0);
 
   // ── balanceTrend (그래프) ─────────────────────────────────────
-  const balanceTrend: BalanceTrendRow[] = results.map((r, i) => ({
-    year: r.year,
-    nominal: toKrw(r.totalNominal),
-    real: toKrw(realData[i]?.totalReal ?? r.totalNominal),
-  }));
+  const balanceTrend: BalanceTrendRow[] = results.map((r, i) => {
+    const taxNom = taxBalNom[i] ?? 0;
+    const taxReal = taxBalReal[i] ?? 0;
+    const dNom = divBalNom[i] ?? 0;
+    const dReal = divBalReal[i] ?? 0;
+    return {
+      year: r.year,
+      nominal: toKrw(taxNom),
+      real: toKrw(taxReal),
+      divNominal: toKrw(dNom),
+      divReal: toKrw(dReal),
+      combinedNominal: toKrw(taxNom + dNom),
+      combinedReal: toKrw(taxReal + dReal),
+    };
+  });
 
   // ── dividendTrend (그래프) ────────────────────────────────────
   const dividendTrend: DividendTrendRow[] = results.map((r, i) => {
     const pensionMonthly = taxMNet[i] ?? 0; // 만원
+    const pensionMonthlyReal = taxMNetReal[i] ?? 0; // 만원
     const brokerageMonthly = divMNet[i] ?? 0; // 만원
+    const brokerageMonthlyReal = divMNetReal[i] ?? 0; // 만원
     return {
       year: r.year,
       pensionMonthly: toKrw(pensionMonthly),
+      pensionMonthlyReal: toKrw(pensionMonthlyReal),
       brokerageMonthly: toKrw(brokerageMonthly),
+      brokerageMonthlyReal: toKrw(brokerageMonthlyReal),
       total: toKrw(pensionMonthly + brokerageMonthly),
+      totalReal: toKrw(pensionMonthlyReal + brokerageMonthlyReal),
     };
   });
 

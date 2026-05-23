@@ -111,6 +111,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading, authRestoreStatus, signIn, signOut, refreshUser } = useAuth();
   const [notifEnabled, setNotifEnabled] = useState(settingsData.notifEnabled);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState(() => getCurrentAuthUser());
   const [firebaseUserStatus, setFirebaseUserStatus] = useState<FirebaseUserStatus>(firebaseUser ? "ready" : "signedOut");
   const [rtdbResults, setRtdbResults] = useState(RTDB_INITIAL_RESULTS);
@@ -323,108 +324,124 @@ export default function SettingsScreen() {
         </Text>
       </TouchableOpacity>
 
-      <View style={[styles.diagnosticCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.diagnosticHeader}>
-          <View style={[styles.settingIcon, { backgroundColor: colors.secondary + "16" }]}>
-            <Feather name="activity" size={16} color={colors.secondary} />
-          </View>
-          <View style={styles.diagnosticTitleWrap}>
-            <Text style={[styles.diagnosticTitle, { color: colors.text }]}>로그인 진단</Text>
-            <Text style={[styles.diagnosticSubtitle, { color: colors.textSub }]}>Android Development Build 확인용</Text>
-          </View>
-        </View>
+      <TouchableOpacity
+        style={[styles.diagToggleBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => setShowDiagnostics((v) => !v)}
+        activeOpacity={0.8}
+      >
+        <Feather name="terminal" size={15} color={colors.textSub} />
+        <Text style={[styles.diagToggleText, { color: colors.textSub }]}>
+          {showDiagnostics ? "개발자 진단 닫기" : "개발자 진단 보기"}
+        </Text>
+        <Feather name={showDiagnostics ? "chevron-up" : "chevron-down"} size={15} color={colors.textSub} />
+      </TouchableOpacity>
 
-        <View style={[styles.diagnosticRows, { borderTopColor: colors.border }]}>
-          <DiagnosticRow label="로그인 상태" value={isAuthLoading ? "인증 상태 확인 중" : user ? "로그인됨" : "비로그인"} />
-          <View style={[styles.matchBox, { backgroundColor: colors.muted }]}>
-            <DiagnosticRow label="Firebase API Key" value={firebaseEnv.hasApiKey ? "있음" : "없음"} />
-            <DiagnosticRow label="Firebase Auth Domain" value={firebaseEnv.hasAuthDomain ? "있음" : "없음"} />
-            <DiagnosticRow label="Firebase Database URL" value={firebaseEnv.hasDatabaseUrl ? "있음" : "없음"} />
-            <DiagnosticRow label="Firebase Project ID" value={firebaseEnv.projectId} mono />
-            <DiagnosticRow label="Firebase Storage Bucket" value={firebaseEnv.hasStorageBucket ? "있음" : "없음"} />
-            <DiagnosticRow label="Firebase Messaging Sender ID" value={firebaseEnv.hasMessagingSenderId ? "있음" : "없음"} />
-            <DiagnosticRow label="Firebase App ID" value={firebaseEnv.hasAppId ? "있음" : "없음"} />
-            <DiagnosticRow label="Google Web Client ID" value={googleAuthEnv.hasGoogleWebClientId ? "있음" : "없음"} />
-          </View>
-          {!user && isAuthLoading ? (
-            <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>
-              인증 상태를 확인하는 중입니다.
-            </Text>
-          ) : !user ? (
-            <>
-              <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>
-                Development Build에서 Google 로그인을 테스트해 주세요.
-              </Text>
-              <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>
-                Expo Go에서는 Google Sign-In 네이티브 모듈이 정상 동작하지 않을 수 있습니다.
-              </Text>
-            </>
-          ) : (
-            <>
-              <DiagnosticRow label="Firebase Auth uid" value={firebaseUser?.uid ?? user.uid} mono />
-              <DiagnosticRow label="email" value={user.email} mono />
-              <DiagnosticRow label="displayName" value={user.displayName || "-"} />
-              <DiagnosticRow label="safe_uid_at_dot" value={safeUidAtDot} mono />
-              <DiagnosticRow label="safe_uid_dot_only" value={safeUidDotOnly} mono />
-            </>
-          )}
-          <View style={[styles.matchBox, { backgroundColor: colors.muted }]}>
-            <DiagnosticRow label="인증 상태" value={authStatusLabel} />
-            <DiagnosticRow label="로그인 복원" value={loginRestoreLabel} />
-            <DiagnosticRow label="AuthContext email" value={authContextEmail || "-"} mono />
-            <DiagnosticRow label="Firebase currentUser email" value={firebaseCurrentEmailLabel} mono />
-            <DiagnosticRow label="email 일치 여부" value={authEmailsMatchLabel} />
-          </View>
-        </View>
-      </View>
+      {showDiagnostics && (
+        <>
+          <View style={[styles.diagnosticCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.diagnosticHeader}>
+              <View style={[styles.settingIcon, { backgroundColor: colors.secondary + "16" }]}>
+                <Feather name="activity" size={16} color={colors.secondary} />
+              </View>
+              <View style={styles.diagnosticTitleWrap}>
+                <Text style={[styles.diagnosticTitle, { color: colors.text }]}>로그인 진단</Text>
+                <Text style={[styles.diagnosticSubtitle, { color: colors.textSub }]}>Android Development Build 확인용</Text>
+              </View>
+            </View>
 
-      <View style={[styles.diagnosticCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.diagnosticHeader}>
-          <View style={[styles.settingIcon, { backgroundColor: colors.primary + "16" }]}>
-            <Feather name="database" size={16} color={colors.primary} />
+            <View style={[styles.diagnosticRows, { borderTopColor: colors.border }]}>
+              <DiagnosticRow label="로그인 상태" value={isAuthLoading ? "인증 상태 확인 중" : user ? "로그인됨" : "비로그인"} />
+              <View style={[styles.matchBox, { backgroundColor: colors.muted }]}>
+                <DiagnosticRow label="Firebase API Key" value={firebaseEnv.hasApiKey ? "있음" : "없음"} />
+                <DiagnosticRow label="Firebase Auth Domain" value={firebaseEnv.hasAuthDomain ? "있음" : "없음"} />
+                <DiagnosticRow label="Firebase Database URL" value={firebaseEnv.hasDatabaseUrl ? "있음" : "없음"} />
+                <DiagnosticRow label="Firebase Project ID" value={firebaseEnv.projectId} mono />
+                <DiagnosticRow label="Firebase Storage Bucket" value={firebaseEnv.hasStorageBucket ? "있음" : "없음"} />
+                <DiagnosticRow label="Firebase Messaging Sender ID" value={firebaseEnv.hasMessagingSenderId ? "있음" : "없음"} />
+                <DiagnosticRow label="Firebase App ID" value={firebaseEnv.hasAppId ? "있음" : "없음"} />
+                <DiagnosticRow label="Google Web Client ID" value={googleAuthEnv.hasGoogleWebClientId ? "있음" : "없음"} />
+              </View>
+              {!user && isAuthLoading ? (
+                <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>
+                  인증 상태를 확인하는 중입니다.
+                </Text>
+              ) : !user ? (
+                <>
+                  <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>
+                    Development Build에서 Google 로그인을 테스트해 주세요.
+                  </Text>
+                  <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>
+                    Expo Go에서는 Google Sign-In 네이티브 모듈이 정상 동작하지 않을 수 있습니다.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <DiagnosticRow label="Firebase Auth uid" value={firebaseUser?.uid ?? user.uid} mono />
+                  <DiagnosticRow label="email" value={user.email} mono />
+                  <DiagnosticRow label="displayName" value={user.displayName || "-"} />
+                  <DiagnosticRow label="safe_uid_at_dot" value={safeUidAtDot} mono />
+                  <DiagnosticRow label="safe_uid_dot_only" value={safeUidDotOnly} mono />
+                </>
+              )}
+              <View style={[styles.matchBox, { backgroundColor: colors.muted }]}>
+                <DiagnosticRow label="인증 상태" value={authStatusLabel} />
+                <DiagnosticRow label="로그인 복원" value={loginRestoreLabel} />
+                <DiagnosticRow label="AuthContext email" value={authContextEmail || "-"} mono />
+                <DiagnosticRow label="Firebase currentUser email" value={firebaseCurrentEmailLabel} mono />
+                <DiagnosticRow label="email 일치 여부" value={authEmailsMatchLabel} />
+              </View>
+            </View>
           </View>
-          <View style={styles.diagnosticTitleWrap}>
-            <Text style={[styles.diagnosticTitle, { color: colors.text }]}>RTDB 읽기 진단</Text>
-            <Text style={[styles.diagnosticSubtitle, { color: colors.textSub }]}>
-              Firebase Realtime Database 주요 경로 확인
-            </Text>
-          </View>
-        </View>
 
-        <View style={[styles.diagnosticRows, { borderTopColor: colors.border }]}>
-          {!user ? (
-            <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>로그인 후 RTDB 읽기 테스트 가능</Text>
-          ) : (
-            <>
-              <DiagnosticRow label="safe_uid_at_dot" value={safeUidAtDot} mono />
-              <DiagnosticRow label="safe_uid_dot_only" value={safeUidDotOnly} mono />
-              <RtdbDiagnosticRow label="dividend_calendar" result={rtdbResults.dividend_calendar} />
-              <RtdbDiagnosticRow label="tracker" result={rtdbResults.tracker} />
-              <RtdbDiagnosticRow label="tracker_config" result={rtdbResults.tracker_config} />
-              <RtdbDiagnosticRow label="sim_config" result={rtdbResults.sim_config} />
-              <RtdbDiagnosticRow label="favorite_links" result={rtdbResults.favorite_links} />
-            </>
-          )}
-          {rtdbMessage ? <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>{rtdbMessage}</Text> : null}
-          <TouchableOpacity
-            style={[
-              styles.rtdbButton,
-              {
-                backgroundColor: user && !isRtdbReading ? colors.primary : colors.muted,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={handleRtdbReadTest}
-            activeOpacity={0.8}
-            disabled={!user || isRtdbReading}
-          >
-            <Feather name="download-cloud" size={15} color={user && !isRtdbReading ? "#FFFFFF" : colors.textSub} />
-            <Text style={[styles.rtdbButtonText, { color: user && !isRtdbReading ? "#FFFFFF" : colors.textSub }]}>
-              {isRtdbReading ? "읽는 중..." : "RTDB 읽기 테스트"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+          <View style={[styles.diagnosticCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.diagnosticHeader}>
+              <View style={[styles.settingIcon, { backgroundColor: colors.primary + "16" }]}>
+                <Feather name="database" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.diagnosticTitleWrap}>
+                <Text style={[styles.diagnosticTitle, { color: colors.text }]}>RTDB 읽기 진단</Text>
+                <Text style={[styles.diagnosticSubtitle, { color: colors.textSub }]}>
+                  Firebase Realtime Database 주요 경로 확인
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.diagnosticRows, { borderTopColor: colors.border }]}>
+              {!user ? (
+                <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>로그인 후 RTDB 읽기 테스트 가능</Text>
+              ) : (
+                <>
+                  <DiagnosticRow label="safe_uid_at_dot" value={safeUidAtDot} mono />
+                  <DiagnosticRow label="safe_uid_dot_only" value={safeUidDotOnly} mono />
+                  <RtdbDiagnosticRow label="dividend_calendar" result={rtdbResults.dividend_calendar} />
+                  <RtdbDiagnosticRow label="tracker" result={rtdbResults.tracker} />
+                  <RtdbDiagnosticRow label="tracker_config" result={rtdbResults.tracker_config} />
+                  <RtdbDiagnosticRow label="sim_config" result={rtdbResults.sim_config} />
+                  <RtdbDiagnosticRow label="favorite_links" result={rtdbResults.favorite_links} />
+                </>
+              )}
+              {rtdbMessage ? <Text style={[styles.diagnosticNote, { color: colors.textSub }]}>{rtdbMessage}</Text> : null}
+              <TouchableOpacity
+                style={[
+                  styles.rtdbButton,
+                  {
+                    backgroundColor: user && !isRtdbReading ? colors.primary : colors.muted,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={handleRtdbReadTest}
+                activeOpacity={0.8}
+                disabled={!user || isRtdbReading}
+              >
+                <Feather name="download-cloud" size={15} color={user && !isRtdbReading ? "#FFFFFF" : colors.textSub} />
+                <Text style={[styles.rtdbButtonText, { color: user && !isRtdbReading ? "#FFFFFF" : colors.textSub }]}>
+                  {isRtdbReading ? "읽는 중..." : "RTDB 읽기 테스트"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      )}
 
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.settingRow}>
@@ -533,5 +550,7 @@ const styles = StyleSheet.create({
   settingValue: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, padding: 16, borderWidth: 1, minHeight: 52, marginTop: 4 },
   logoutText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  diagToggleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, padding: 12, borderWidth: 1, minHeight: 44 },
+  diagToggleText: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1, textAlign: "center" },
   footer: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, marginBottom: 4 },
 });
