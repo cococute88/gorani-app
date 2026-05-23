@@ -21,8 +21,10 @@ export async function updateFavoriteLink(email: string, storageKey: string, link
   if (!url) {
     throw new Error("URL을 입력해 주세요.");
   }
+  const titleValue = link.title.trim();
   await update(ref(getFirebaseDb(), getFavoriteLinkPath(email, storageKey)), {
-    title: link.title.trim(),
+    title: titleValue,
+    name: titleValue, // Keep name in sync with title for compatibility
     url,
     updatedAt: new Date().toISOString(),
   });

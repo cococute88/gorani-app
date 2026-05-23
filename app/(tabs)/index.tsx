@@ -34,6 +34,7 @@ type NormalizedFavoriteLink = CustomLink & {
   originalIndex: number;
 };
 
+// Title priority: title > name > label > text > displayName > linkName > 링크명 > 이름 > 제목
 const FAVORITE_TITLE_KEYS = ["title", "name", "label", "text", "displayName", "linkName", "링크명", "이름", "제목"];
 const FAVORITE_URL_KEYS = ["url", "href", "link", "value", "링크", "주소"];
 
@@ -449,9 +450,16 @@ function getFavoriteLinkOrder(candidate: FavoriteLinkCandidate) {
 }
 
 function getStringValue(candidate: Record<string, unknown>, aliases: string[]) {
-  const wanted = new Set(aliases.map(normalizeFavoriteKey));
-  const value = Object.entries(candidate).find(([key]) => wanted.has(normalizeFavoriteKey(key)))?.[1];
-  return typeof value === "string" ? value.trim() : "";
+  // Priority-based search: iterate through aliases in order and return first match
+  const normalized = aliases.map(normalizeFavoriteKey);
+  for (const alias of normalized) {
+    const entry = Object.entries(candidate).find(([key]) => normalizeFavoriteKey(key) === alias);
+    if (entry && typeof entry[1] === "string") {
+      const trimmed = entry[1].trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return "";
 }
 
 function normalizeFavoriteKey(value: string) {
