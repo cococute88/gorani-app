@@ -1,7 +1,7 @@
 ﻿import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -21,10 +21,6 @@ import { TAB_BAR_SAFE_BOTTOM } from "@/constants/layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useDividendCalendarQuery } from "@/hooks/useRtdbData";
 import { normalizeDividendCalendar } from "@/utils/normalizeDividendCalendar";
-import {
-  isRefreshEndpointConfigured,
-  refreshDividendCalendar,
-} from "@/services/refreshDividendCalendar";
 import { writeTickerMemo } from "@/services/rtdbCalendarMemoService";
 import {
   CalendarEvent,
@@ -68,6 +64,13 @@ const SCROLL_TEST_EVENTS: CalendarEvent[] = [
   { id: "cal-extra-7", portfolioName: "배당주", ticker: "CHRD", eventType: "Pay", date: "2026-11-06", shortLabel: "CHRD Pay", dividendAmount: 1.25, currentPrice: 118.4, annualYield: 4.2, memo: "테스트용 지급", star: false, heart: true, alertEnabled: false, status: "estimated" },
   { id: "cal-extra-8", portfolioName: "기타", ticker: "메모", eventType: "custom", date: "2026-12-16", shortLabel: "연말체크", memo: "연말 리밸런싱", customTitle: "연말 체크", star: false, heart: false, alertEnabled: false, status: "declared" },
 ];
+
+/**
+ * 무료 모드 일정 최신화 URL.
+ * Polygon/Finnhub API key는 앱에 넣지 않고 Streamlit에서 처리합니다.
+ * .env에 EXPO_PUBLIC_STREAMLIT_CALENDAR_URL=https://your-app.streamlit.app 형태로 설정하세요.
+ */
+const STREAMLIT_CALENDAR_URL = process.env.EXPO_PUBLIC_STREAMLIT_CALENDAR_URL ?? "";
 
 /**
  * Firebase의 dividend_calendar 원본 객체에서 ticker별 메모 map을 추출.
@@ -140,7 +143,6 @@ export default function CalendarScreen() {
   const [removeTicker, setRemoveTicker] = useState("");
   const [removeSearch, setRemoveSearch] = useState("");
   const [newTicker, setNewTicker] = useState("");
-  const [isRefreshingCalendar, setIsRefreshingCalendar] = useState(false);
   const [isSavingMemo, setIsSavingMemo] = useState(false);
   const queryClient = useQueryClient();
   const [scope, setScope] = useState<MonthScope>("month");
@@ -475,39 +477,34 @@ export default function CalendarScreen() {
     });
   };
 
-  const handleRefreshCalendar = useCallback(async () => {
-    if (isRefreshingCalendar) return;
-    if (!hasLoginEmail) {
-      Alert.alert("일정 최신화", "로그인 후 사용할 수 있어요.");
+  // 무료 모드 일정 최신화: Firebase Functions 대신 Streamlit 앱으로 안내.
+  // Polygon/Finnhub API key는 앱에 포함하지 않으며, Streamlit에서 처리합니다.
+  const handleRefreshCalendar = useCallback(() => {
+    if (!STREAMLIT_CALENDAR_URL) {
+      Alert.alert(
+        "일정 최신화",
+        "Streamlit 최신화 페이지 URL이 아직 설정되지 않았습니다.\n.env에 EXPO_PUBLIC_STREAMLIT_CALENDAR_URL을 설정해 주세요.",
+      );
       return;
     }
 
-    setIsRefreshingCalendar(true);
-    try {
-      const result = await refreshDividendCalendar(user?.email);
-      if (result.ok) {
-        await queryClient.invalidateQueries({
-          queryKey: ["rtdb", "dividend_calendar", user?.email],
-        });
-        Alert.alert(
-          "일정 최신화 완료",
-          result.updated !== undefined
-            ? `최신화된 일정 ${result.updated}건을 적용했어요.`
-            : (result.message ?? "최신화가 완료되었습니다."),
-        );
-      } else {
-        Alert.alert("일정 최신화", result.message);
-        if (result.reason === "server" || result.reason === "unknown" || result.reason === "network") {
-          console.warn("[refreshDividendCalendar]", result);
-        }
-      }
-    } catch (error) {
-      console.error("[refreshDividendCalendar] unexpected", error);
-      Alert.alert("일정 최신화", "예상치 못한 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setIsRefreshingCalendar(false);
-    }
-  }, [hasLoginEmail, isRefreshingCalendar, queryClient, user?.email]);
+    Alert.alert(
+      "일정 최신화",
+      "무료 모드에서는 Streamlit에서 일정을 최신화합니다.\nStreamlit 페이지를 열까요?",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "열기",
+          onPress: () => {
+            Linking.openURL(STREAMLIT_CALENDAR_URL).catch((error) => {
+              console.warn("[handleRefreshCalendar] Linking.openURL failed", error);
+              Alert.alert("오류", "페이지를 열 수 없습니다. URL을 확인해 주세요.");
+            });
+          },
+        },
+      ],
+    );
+  }, []);
 
   // 종목 메모 편집/저장 통합 핸들러.
   // - ticker key는 항상 대문자
@@ -618,22 +615,16 @@ export default function CalendarScreen() {
         </View>
         <TouchableOpacity
           onPress={handleRefreshCalendar}
-          disabled={isRefreshingCalendar}
           style={[
             styles.manageBtn,
             {
               backgroundColor: colors.card,
               borderColor: colors.border,
-              opacity: isRefreshingCalendar ? 0.5 : 1,
               marginRight: 6,
             },
           ]}
         >
-          {isRefreshingCalendar ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Feather name="refresh-cw" size={16} color={colors.primary} />
-          )}
+          <Feather name="refresh-cw" size={16} color={colors.primary} />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setShowTickerManager(true)}
@@ -643,7 +634,7 @@ export default function CalendarScreen() {
         </TouchableOpacity>
       </View>
 
-      {!isRefreshEndpointConfigured() && (
+      {!STREAMLIT_CALENDAR_URL && (
         <View
           style={[
             styles.refreshHint,
@@ -652,7 +643,7 @@ export default function CalendarScreen() {
         >
           <Feather name="info" size={13} color={colors.textSub} />
           <Text style={[styles.refreshHintText, { color: colors.textSub }]}>
-            일정 최신화 backend가 아직 연결되지 않았어요. 환경변수 EXPO_PUBLIC_DIVIDEND_REFRESH_ENDPOINT를 설정하면 활성화됩니다.
+            무료 모드에서는 Streamlit에서 Polygon/Finnhub 최신화를 실행합니다. EXPO_PUBLIC_STREAMLIT_CALENDAR_URL을 설정하면 버튼이 활성화됩니다.
           </Text>
         </View>
       )}
@@ -1171,9 +1162,10 @@ function TickerManagerModal({
   const colors = useColors();
   const selected = tickers.find((ticker) => ticker.ticker === selectedTicker);
   const removeQuery = removeSearch.trim().toUpperCase();
+  // 검색어가 비어 있으면 후보 ticker를 표시하지 않음 (모달 하단 잘림 방지)
   const removeCandidates = removeQuery
     ? tickers.filter((ticker) => ticker.ticker.includes(removeQuery)).slice(0, 8)
-    : tickers.slice(0, 8);
+    : [];
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -1189,7 +1181,13 @@ function TickerManagerModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalScrollContent}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={[styles.managerLabel, { color: colors.textSub }]}>현재 등록된 티커</Text>
             <View style={styles.registeredGrid}>
               {tickers.map((ticker) => {
@@ -1262,46 +1260,53 @@ function TickerManagerModal({
 
             <View style={styles.removeSection}>
               <Text style={[styles.managerLabel, { color: colors.textSub }]}>삭제할 종목 검색</Text>
-              <TextInput
-                value={removeSearch}
-                onChangeText={(query) => {
-                  onChangeRemoveSearch(query);
-                  onSelectRemoveTicker("");
-                }}
-                autoCapitalize="characters"
-                placeholder="e.g. sch"
-                placeholderTextColor={colors.textSub}
-                style={[styles.tickerInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-              />
-              <View style={styles.removeCandidateRow}>
-                {removeCandidates.map((ticker) => {
-                  const active = removeTicker === ticker.ticker;
-                  return (
-                    <TouchableOpacity
-                      key={ticker.ticker}
-                      onPress={() => onSelectRemoveTicker(ticker.ticker)}
-                      style={[
-                        styles.removeCandidate,
-                        { backgroundColor: active ? "#F4E2B8" : colors.card, borderColor: active ? colors.primary + "66" : colors.border },
-                      ]}
-                    >
-                      <Text style={[styles.removeCandidateText, { color: colors.secondary }]}>{ticker.ticker}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <View style={styles.removeActionRow}>
-                <Text style={[styles.removeSelectedText, { color: colors.textSub }]}>
-                  선택: {removeTicker || "-"}
-                </Text>
+              <View style={styles.removeSearchRow}>
+                <TextInput
+                  value={removeSearch}
+                  onChangeText={(query) => {
+                    onChangeRemoveSearch(query);
+                    onSelectRemoveTicker("");
+                  }}
+                  autoCapitalize="characters"
+                  placeholder="e.g. sch"
+                  placeholderTextColor={colors.textSub}
+                  style={[styles.removeSearchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                />
                 <TouchableOpacity
                   onPress={onRemoveTicker}
                   disabled={!removeTicker}
                   style={[styles.removeBtn, { backgroundColor: removeTicker ? "#D85F4F" : colors.muted }]}
                 >
-                  <Text style={styles.removeBtnText}>Remove</Text>
+                  <Text style={[styles.removeBtnText, { color: removeTicker ? "#FFF" : colors.textSub }]}>삭제</Text>
                 </TouchableOpacity>
               </View>
+              {removeQuery && removeCandidates.length === 0 && (
+                <Text style={[styles.removeEmptyText, { color: colors.textSub }]}>검색 결과가 없어요</Text>
+              )}
+              {removeCandidates.length > 0 && (
+                <View style={styles.removeCandidateRow}>
+                  {removeCandidates.map((ticker) => {
+                    const active = removeTicker === ticker.ticker;
+                    return (
+                      <TouchableOpacity
+                        key={ticker.ticker}
+                        onPress={() => onSelectRemoveTicker(ticker.ticker)}
+                        style={[
+                          styles.removeCandidate,
+                          { backgroundColor: active ? "#F4E2B8" : colors.card, borderColor: active ? colors.primary + "66" : colors.border },
+                        ]}
+                      >
+                        <Text style={[styles.removeCandidateText, { color: colors.secondary }]}>{ticker.ticker}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {removeTicker ? (
+                <Text style={[styles.removeSelectedText, { color: colors.textSub }]}>
+                  선택: {removeTicker}
+                </Text>
+              ) : null}
             </View>
           </ScrollView>
         </View>
@@ -1447,9 +1452,13 @@ const styles = StyleSheet.create({
   modalSubtitle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   modalCloseBtn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   modalScroll: { flex: 1 },
+  modalScrollContent: { paddingBottom: 80 },
   managerLabel: { fontSize: 11, fontFamily: "Inter_700Bold", marginBottom: 6 },
-  removeBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+  removeBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, minWidth: 64, alignItems: "center", justifyContent: "center" },
   removeBtnText: { color: "#FFF", fontSize: 12, fontFamily: "Inter_700Bold" },
+  removeSearchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  removeSearchInput: { flex: 1, height: 36, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  removeEmptyText: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 6 },
   addTickerRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
   tickerInput: { flex: 1, height: 36, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 12, fontFamily: "Inter_600SemiBold" },
   managerMemoInput: { height: 44, paddingVertical: 8, lineHeight: 16, fontSize: 11 },

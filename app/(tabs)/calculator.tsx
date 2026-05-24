@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -41,6 +41,7 @@ export default function CalculatorScreen() {
   });
   const [divTaxSort, setDivTaxSort] = useState<{ key: DivTaxSortKey; dir: SortDir }>({ key: "exDate", dir: "asc" });
   const [conversionRatioSort, setConversionRatioSort] = useState<RatioSortDir>(null);
+  const [hasShownApiNotice, setHasShownApiNotice] = useState(false);
 
   useEffect(() => {
     if (params.mode === "conversion" || params.mode === "dividendTax") {
@@ -86,6 +87,33 @@ export default function CalculatorScreen() {
     setConversionRatioSort((prev) => (prev === "asc" ? "desc" : "asc"));
   };
 
+  // 조회 버튼: 실데이터 API 미연결 상태에서 입력값 normalize + 사용자 안내.
+  // - ticker는 trim + uppercase
+  // - 첫 클릭에만 Alert를 띄우고, 이후로는 todoText만으로 안내 (UX 보호)
+  const handleFetch = (target: CalcMode) => {
+    if (target === "conversion") {
+      setConvInputs((prev) => ({
+        ...prev,
+        sellTicker: prev.sellTicker.trim().toUpperCase(),
+        buyTicker: prev.buyTicker.trim().toUpperCase(),
+        startDate: prev.startDate.trim(),
+        endDate: prev.endDate.trim(),
+      }));
+    } else {
+      setTaxInputs((prev) => ({
+        ...prev,
+        ticker: prev.ticker.trim().toUpperCase(),
+      }));
+    }
+    if (!hasShownApiNotice) {
+      Alert.alert(
+        "조회",
+        "실시간 가격 API는 아직 연결되지 않았어요.\n현재는 입력값 기준 더미 데이터로 화면 흐름만 확인합니다.",
+      );
+      setHasShownApiNotice(true);
+    }
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -117,14 +145,23 @@ export default function CalculatorScreen() {
       {mode === "conversion" ? (
         <>
           <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>입력</Text>
+            <View style={styles.cardTitleRow}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>입력</Text>
+              <TouchableOpacity
+                onPress={() => handleFetch("conversion")}
+                style={[styles.fetchBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}
+              >
+                <Feather name="search" size={12} color={colors.primary} />
+                <Text style={[styles.fetchBtnText, { color: colors.primary }]}>조회</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.inputGrid}>
               <InputField label="매도 티커" value={convInputs.sellTicker} onChangeText={(value) => setConvInputs((prev) => ({ ...prev, sellTicker: value.toUpperCase() }))} />
               <InputField label="매수 티커" value={convInputs.buyTicker} onChangeText={(value) => setConvInputs((prev) => ({ ...prev, buyTicker: value.toUpperCase() }))} />
               <InputField label="시작일" value={convInputs.startDate} onChangeText={(value) => setConvInputs((prev) => ({ ...prev, startDate: value }))} />
               <InputField label="종료일" value={convInputs.endDate} onChangeText={(value) => setConvInputs((prev) => ({ ...prev, endDate: value }))} />
             </View>
-            <Text style={[styles.todoText, { color: colors.textSub }]}>TODO: 실제 가격 API 연결 전까지는 입력값에 따라 더미 그래프와 표만 반응합니다.</Text>
+            <Text style={[styles.todoText, { color: colors.textSub }]}>실시간 가격 API 미연결 · 입력값 기반 더미 데이터로 화면 흐름만 확인합니다.</Text>
           </View>
 
           <View style={styles.conversionMetricRow}>
@@ -180,6 +217,16 @@ export default function CalculatorScreen() {
       ) : (
         <>
           <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.cardTitleRow}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>입력</Text>
+              <TouchableOpacity
+                onPress={() => handleFetch("dividendTax")}
+                style={[styles.fetchBtn, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "55" }]}
+              >
+                <Feather name="search" size={12} color={colors.primary} />
+                <Text style={[styles.fetchBtnText, { color: colors.primary }]}>조회</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.inputGrid}>
               <InputField label="티커" value={taxInputs.ticker} onChangeText={(value) => setTaxInputs((prev) => ({ ...prev, ticker: value.toUpperCase() }))} />
               <InputField label="투자자금(만)" value={taxInputs.investmentAmount} keyboardType="numeric" onChangeText={(value) => setTaxInputs((prev) => ({ ...prev, investmentAmount: onlyNumber(value) }))} />
@@ -188,7 +235,7 @@ export default function CalculatorScreen() {
               <InputField label="배당소득세율(%)" value={taxInputs.taxRate} keyboardType="numeric" onChangeText={(value) => setTaxInputs((prev) => ({ ...prev, taxRate: decimalNumber(value) }))} />
               <PeriodField value={taxInputs.years} onChange={(value) => setTaxInputs((prev) => ({ ...prev, years: value }))} />
             </View>
-            <Text style={[styles.todoText, { color: colors.textSub }]}>TODO: 실제 배당/시세 API 연결 전까지는 입력값에 따라 더미 결과만 갱신됩니다.</Text>
+            <Text style={[styles.todoText, { color: colors.textSub }]}>실시간 배당/시세 API 미연결 · 입력값 기반 더미 결과만 갱신됩니다.</Text>
           </View>
 
           <View style={styles.taxMetricGrid}>
@@ -596,6 +643,9 @@ const styles = StyleSheet.create({
   modeBtnText: { fontSize: 12, fontFamily: "Inter_700Bold", textAlign: "center" },
   inputCard: { borderRadius: 14, padding: 14, borderWidth: 1, gap: 12 },
   cardTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  fetchBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  fetchBtnText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   inputGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   inputItem: { width: "47%", gap: 5 },
   inputLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },

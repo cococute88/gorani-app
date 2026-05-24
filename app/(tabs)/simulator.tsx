@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { SectionHeader } from "@/components/SectionHeader";
 import { MultiLineChart } from "@/components/MultiLineChart";
@@ -10,6 +11,7 @@ import { simulatorConfig, formatKRW } from "@/data/dummyData";
 import { useAuth } from "@/hooks/useAuth";
 import { useSimConfigQuery } from "@/hooks/useRtdbData";
 import { normalizeSimConfig } from "@/utils/normalizeSimConfig";
+import { writeSimConfig, type SimConfigPayload, type SimPlanRowPayload } from "@/services/rtdbSimConfigWriteService";
 import {
   runSimulation,
   type EngineInput,
@@ -111,6 +113,8 @@ export default function SimulatorScreen() {
   const [showDividendDetail, setShowDividendDetail] = useState(false);
   const [balanceDetailSort, setBalanceDetailSort] = useState<TableSort>({ column: null, direction: null });
   const [dividendDetailSort, setDividendDetailSort] = useState<TableSort>({ column: null, direction: null });
+  const [isSavingSimConfig, setIsSavingSimConfig] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     setCfg(boundConfig);
@@ -169,6 +173,58 @@ export default function SimulatorScreen() {
         : "asc";
       return { ...prev, [tab]: { column: nextDirection ? column : null, direction: nextDirection } };
     });
+  };
+
+  // 시뮬 설정 + 연도별 투자 계획을 Firebase에 저장.
+  // - cfg는 만원으로 보관된 초기잔고를 만원 단위로 변환해서 저장 (Streamlit과 동일 단위)
+  // - planRows의 monthlySaving은 이미 만원 단위 문자열이라 Number 변환만
+  const handleSaveSimConfig = async () => {
+    if (!hasLoginEmail || !user?.email) {
+      Alert.alert("저장 불가", "로그인 후 저장할 수 있어요.");
+      return;
+    }
+
+    const safeNumber = (value: number, fallback = 0) =>
+      Number.isFinite(value) ? value : fallback;
+
+    const configPayload: SimConfigPayload = {
+      startYear: safeNumber(cfg.startYear, simulatorConfig.startYear),
+      simYears: safeNumber(cfg.simYears, simulatorConfig.simYears),
+      returnRate: safeNumber(cfg.returnRate, simulatorConfig.returnRate),
+      inflationRate: safeNumber(cfg.inflationRate, simulatorConfig.inflationRate),
+      // cfg는 KRW 원 단위로 보관 → Streamlit이 기대하는 만원 단위로 환산
+      initIsa: Math.round(safeNumber(cfg.initIsa) / 10000),
+      initPension: Math.round(safeNumber(cfg.initPension) / 10000),
+      initGeneral: Math.round(safeNumber(cfg.initGeneral) / 10000),
+      initDividend: Math.round(safeNumber(cfg.initDividend) / 10000),
+      withdrawRate: safeNumber(cfg.withdrawRate, simulatorConfig.withdrawRate),
+      withdrawIncrease: safeNumber(cfg.withdrawIncrease, simulatorConfig.withdrawIncrease),
+      withdrawDelay: safeNumber(cfg.withdrawDelay, simulatorConfig.withdrawDelay),
+    };
+
+    const planRowsPayload: SimPlanRowPayload[] = investmentPlanRows.map((row) => {
+      const monthly = Number((row.monthlySaving ?? "").replace(/[^0-9.-]/g, ""));
+      return {
+        year: row.year,
+        monthlySaving: Number.isFinite(monthly) ? Math.max(0, Math.round(monthly)) : 0,
+        isa: Boolean(row.isa),
+        pension: Boolean(row.pension),
+        isaTransfer: Boolean(row.isaTransfer),
+      };
+    });
+
+    setIsSavingSimConfig(true);
+    try {
+      await writeSimConfig(user.email, configPayload, planRowsPayload);
+      await queryClient.invalidateQueries({ queryKey: ["rtdb", "sim_config", user.email] });
+      Alert.alert("저장 완료", "시뮬 설정과 투자 계획이 저장되었어요.");
+    } catch (error) {
+      console.error("[writeSimConfig] failed", error);
+      const reason = error instanceof Error ? error.message : "알 수 없는 오류";
+      Alert.alert("저장 실패", `시뮬 설정을 저장하지 못했어요.\n${reason}`);
+    } finally {
+      setIsSavingSimConfig(false);
+    }
   };
 
   const KPI_ITEMS = [
@@ -268,7 +324,31 @@ export default function SimulatorScreen() {
       </View>
 
       <View style={[styles.investPlanCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.investPlanTitle, { color: colors.text }]}>년도별 투자 계획</Text>
+        <View style={styles.investPlanTitleRow}>
+          <Text style={[styles.investPlanTitle, { color: colors.text }]}>년도별 투자 계획</Text>
+          <TouchableOpacity
+            onPress={handleSaveSimConfig}
+            disabled={isSavingSimConfig}
+            style={[
+              styles.simSaveBtn,
+              {
+                backgroundColor: hasLoginEmail && !isSavingSimConfig ? colors.primary : colors.muted,
+                opacity: isSavingSimConfig ? 0.7 : 1,
+              },
+            ]}
+          >
+            {isSavingSimConfig ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Feather name="save" size={12} color={hasLoginEmail ? "#FFFFFF" : colors.textSub} />
+                <Text style={[styles.simSaveBtnText, { color: hasLoginEmail ? "#FFFFFF" : colors.textSub }]}>
+                  Firebase 저장
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
         <View style={styles.investPlanTable}>
           <View style={[styles.investPlanHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.investPlanYearCol}>
@@ -808,6 +888,9 @@ const styles = StyleSheet.create({
     shadowColor: "#3D2B1F", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
   },
   investPlanTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  investPlanTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  simSaveBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, minWidth: 100, justifyContent: "center" },
+  simSaveBtnText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   investPlanTable: { width: "100%" },
   investPlanHeader: { minHeight: 34, flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: 1 },
   investPlanBodyScroll: { height: 204 },

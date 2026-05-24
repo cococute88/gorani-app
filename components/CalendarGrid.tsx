@@ -134,28 +134,32 @@ export function CalendarGrid({ year, month, events, selectedDate, filter, onSele
 
                 {/* Event labels */}
                 <View style={styles.eventList}>
-                  {visible.map((ev, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.eventPill,
-                        { backgroundColor: CALENDAR_EVENT_COLORS[ev.eventType] + "20" },
-                      ]}
-                    >
-                      {ev.star ? <Text style={[styles.eventMark, { color: "#F5B731" }]}>★</Text> : null}
-                      {ev.heart ? <Text style={[styles.eventMark, { color: "#E07B6A" }]}>♥</Text> : null}
-                      <Text
+                  {visible.map((ev, idx) => {
+                    const isDeclared = ev.status === "declared";
+                    return (
+                      <View
+                        key={idx}
                         style={[
-                          styles.eventLabel,
-                          { color: CALENDAR_EVENT_COLORS[ev.eventType] },
+                          styles.eventPill,
+                          { backgroundColor: CALENDAR_EVENT_COLORS[ev.eventType] + "20" },
+                          !isDeclared && styles.eventPillEstimated,
                         ]}
-                        numberOfLines={1}
-                        ellipsizeMode="clip"
                       >
-                        {ev.ticker}
-                      </Text>
-                    </View>
-                  ))}
+                        {ev.star ? <Text style={[styles.eventMark, { color: "#F5B731" }]}>★</Text> : null}
+                        {ev.heart ? <Text style={[styles.eventMark, { color: "#E07B6A" }]}>♥</Text> : null}
+                        <Text
+                          style={[
+                            styles.eventLabel,
+                            { color: CALENDAR_EVENT_COLORS[ev.eventType] },
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="clip"
+                        >
+                          {ev.ticker}
+                        </Text>
+                      </View>
+                    );
+                  })}
                   {extra > 0 && (
                     <Text style={[styles.extraLabel, { color: colors.textSub }]}>+{extra}</Text>
                   )}
@@ -213,6 +217,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 2,
     gap: 1,
+  },
+  eventPillEstimated: {
+    opacity: 0.4,
   },
   eventMark: { flexShrink: 0, fontSize: 8, lineHeight: 12, fontFamily: "Inter_700Bold" },
   eventLabel: { flexShrink: 1, minWidth: 0, fontSize: 9, lineHeight: 12, fontFamily: "Inter_700Bold" },
