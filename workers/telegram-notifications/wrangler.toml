@@ -7,4 +7,4 @@ crons = ["*/5 * * * *"]
 
 [[kv_namespaces]]
 binding = "GORANI_NOTIFICATIONS_KV"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "67539d57b6d8430ebe5a34f5cfec28d2"
