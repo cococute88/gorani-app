@@ -74,7 +74,7 @@ export async function saveNotificationSettingsWithRevision(
       : 0;
     const nextRevision = currentValue ? currentRevision + 1 : 1;
 
-    return normalizeNotificationSettings({
+    return stripUndefinedDeep(normalizeNotificationSettings({
       ...draft,
       telegramEnabled: draft.telegramEnabled,
       telegram: {
@@ -83,7 +83,7 @@ export async function saveNotificationSettingsWithRevision(
       },
       scheduleRevision: nextRevision,
       updatedAt,
-    });
+    }));
   });
 
   if (!result.committed || !result.snapshot.exists()) {
@@ -99,6 +99,35 @@ function validateEmailSafely(email: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefinedDeep(item))
+      .filter((item) => item !== undefined) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (entry === undefined) {
+        continue;
+      }
+
+      const cleaned = stripUndefinedDeep(entry);
+      if (cleaned === undefined) {
+        continue;
+      }
+
+      result[key] = cleaned;
+    }
+
+    return result as T;
+  }
+
+  return value;
 }
 
 function normalizeNotificationSettings(raw: unknown): NotificationSettings {
