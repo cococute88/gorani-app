@@ -162,3 +162,5 @@ android/app/build/
 android/.gradle/
 .vscode/
 tc_out.txt
+
+.env
