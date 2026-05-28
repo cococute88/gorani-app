@@ -1,0 +1,10 @@
+name = "gorani-telegram-notifications"
+main = "src/index.ts"
+compatibility_date = "2026-05-27"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "GORANI_NOTIFICATIONS_KV"
+id = "YOUR_KV_NAMESPACE_ID"

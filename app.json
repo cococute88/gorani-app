@@ -46,7 +46,15 @@
           "image": "./assets/images/native-splash-icon.png",
           "imageWidth": 200
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff"
+        }
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
