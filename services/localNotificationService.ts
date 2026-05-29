@@ -15,7 +15,8 @@ export async function ensureNotificationChannel(): Promise<void> {
 
   await Notifications.setNotificationChannelAsync(GORANI_NOTIFICATION_CHANNEL_ID, {
     name: "Gorani 알림",
-    importance: Notifications.AndroidImportance.DEFAULT,
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: "default",
   });
 }
 
@@ -89,6 +90,8 @@ export async function scheduleLocalNotifications(
         content: {
           title: item.title,
           body: item.body,
+          sound: "default",
+          priority: Notifications.AndroidNotificationPriority.HIGH,
           data: {
             plannedNotificationId: item.plannedNotificationId,
             sourceType: item.sourceType,
@@ -119,6 +122,65 @@ export async function scheduleLocalNotifications(
   }
 
   return ledger;
+}
+
+export async function scheduleLocalTestNotificationAfterSeconds(
+  seconds = 60,
+): Promise<{
+  ok: boolean;
+  notificationId?: string;
+  reason?: string;
+}> {
+  if (Platform.OS === "web") {
+    return { ok: false, reason: "web_skip" };
+  }
+
+  try {
+    const hasPermission = await requestNotificationPermission();
+    if (!hasPermission) {
+      return { ok: false, reason: "permission_denied" };
+    }
+
+    await ensureNotificationChannel();
+
+    const notificationId = `gf_local_test_${Date.now()}`;
+    const delaySeconds = Math.max(1, Math.floor(seconds));
+    const expoNotificationId = await Notifications.scheduleNotificationAsync({
+      identifier: notificationId,
+      content: {
+        title: "Gorani 로컬 푸시 테스트",
+        body: "1분 뒤 로컬 알림 테스트입니다.",
+        sound: "default",
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        data: {
+          sourceType: "local_push_test",
+        },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: delaySeconds,
+        channelId: GORANI_NOTIFICATION_CHANNEL_ID,
+      },
+    });
+
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const isScheduled = scheduled.some((notification) =>
+      notification.identifier === expoNotificationId ||
+      notification.identifier === notificationId,
+    );
+
+    if (!isScheduled) {
+      return { ok: false, notificationId: expoNotificationId, reason: "not_found_after_schedule" };
+    }
+
+    return { ok: true, notificationId: expoNotificationId };
+  } catch (error) {
+    console.warn("[notifications] Local test notification failed.", error);
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : "schedule_failed",
+    };
+  }
 }
 
 export function selectLocalPushTargets(

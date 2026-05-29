@@ -19,6 +19,7 @@ import { TAB_BAR_SAFE_BOTTOM } from "@/constants/layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useColors } from "@/hooks/useColors";
 import { useNotificationSettings } from "@/hooks/useNotificationSettings";
+import { scheduleLocalTestNotificationAfterSeconds } from "@/services/localNotificationService";
 import { sendTelegramTestMessage } from "@/services/telegramSyncService";
 import type {
   CalendarAlertSettings,
@@ -154,6 +155,22 @@ export default function NotificationsScreen() {
     Alert.alert("테스트 실패", "텔레그램 테스트 메시지를 보내지 못했어요.");
   };
 
+  const handleLocalPushTest = async () => {
+    const result = await scheduleLocalTestNotificationAfterSeconds(60);
+    if (result.ok) {
+      Alert.alert(
+        "로컬 푸시 테스트 예약",
+        "1분 뒤 로컬 푸시 테스트를 예약했어요. 앱을 백그라운드로 보내고 기다려 주세요.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "로컬 푸시 테스트 실패",
+      result.reason ?? "로컬 푸시 테스트 알림을 예약하지 못했어요.",
+    );
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -218,6 +235,18 @@ export default function NotificationsScreen() {
             <PressableButton label="텔레그램 테스트 메시지 보내기" onPress={handleTelegramTest} />
             <Text style={[styles.helpText, { color: colors.textSub }]}>
               Worker URL/API key가 없으면 테스트는 건너뜁니다. 6단계 Worker 배포 후 .env에 값을 넣어주세요.
+            </Text>
+          </View>
+        </Card>
+      ) : null}
+
+      {__DEV__ ? (
+        <Card>
+          <SectionHeader title="개발용 로컬 푸시 진단" subtitle="실제 알림 계획과 별개로 로컬 푸시 자체를 확인해요" />
+          <View style={styles.stack}>
+            <PressableButton label="로컬 푸시 1분 테스트" onPress={handleLocalPushTest} />
+            <Text style={[styles.helpText, { color: colors.textSub }]}>
+              예약 후 앱을 백그라운드로 보내고 1분 뒤 알림이 표시되는지 확인하세요.
             </Text>
           </View>
         </Card>

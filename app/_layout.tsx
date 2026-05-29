@@ -10,6 +10,7 @@ import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -22,10 +23,17 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: false,
+    shouldPlaySound: true,
     shouldSetBadge: false,
+    priority: Notifications.AndroidNotificationPriority.HIGH,
   }),
 });
+
+if (__DEV__) {
+  // Android development builds can surface Expo keep-awake failures as LogBox noise;
+  // this does not affect auth, notifications, or app runtime behavior.
+  LogBox.ignoreLogs(["Unable to activate keep awake"]);
+}
 
 // Prevent the native splash screen from auto-hiding.
 // We hide it immediately when the RN root mounts so the custom splash takes over.
