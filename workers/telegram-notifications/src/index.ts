@@ -33,11 +33,13 @@ type Manifest = {
   updatedAt: string;
 };
 
-type StoredNotification = TelegramNotificationPayload & {
+type StoredPlan = {
   safeUid: string;
+  scheduleRevision: number;
+  telegramEnabled: boolean;
   chatId: string;
-  sent: boolean;
-  sentAt?: string;
+  notifications: TelegramNotificationPayload[];
+  updatedAt: string;
 };
 
 const JSON_HEADERS = {
@@ -57,7 +59,7 @@ export default {
 
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname === "/sync") {
-      return handleSync(request, env);
+      return handleSync(request, env, _ctx);
     }
     if (request.method === "POST" && url.pathname === "/test") {
       return handleTest(request, env);
@@ -71,7 +73,7 @@ export default {
   },
 };
 
-async function handleSync(request: Request, env: Env): Promise<Response> {
+async function handleSync(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (!isAuthorized(request, env)) {
     return jsonResponse({ ok: false, error: "unauthorized" }, 401);
   }
@@ -94,43 +96,44 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
 
   await env.GORANI_NOTIFICATIONS_KV.put(manifestKey, JSON.stringify(manifest));
 
-  if (
-    previousManifest &&
-    previousManifest.scheduleRevision !== payload.scheduleRevision
-  ) {
-    await deletePrefix(env.GORANI_NOTIFICATIONS_KV, buildNotificationPrefix(payload.safeUid, previousManifest.scheduleRevision));
+  if (previousManifest && previousManifest.scheduleRevision !== payload.scheduleRevision) {
+    await deletePlanKey(env.GORANI_NOTIFICATIONS_KV, payload.safeUid, previousManifest.scheduleRevision);
+    ctx.waitUntil(
+      deleteLegacyNotificationPrefixSafely(
+        env.GORANI_NOTIFICATIONS_KV,
+        payload.safeUid,
+        previousManifest.scheduleRevision,
+      ),
+    );
   }
 
-  await deletePrefix(env.GORANI_NOTIFICATIONS_KV, buildNotificationPrefix(payload.safeUid, payload.scheduleRevision));
-
   if (!payload.telegramEnabled) {
+    await deletePlanKey(env.GORANI_NOTIFICATIONS_KV, payload.safeUid, payload.scheduleRevision);
     return jsonResponse({ ok: true, savedCount: 0, disabled: true });
   }
   if (!payload.chatId.trim()) {
     return jsonResponse({ ok: false, error: "missing_chat_id" }, 400);
   }
 
-  let savedCount = 0;
-  for (const notification of payload.notifications) {
-    if (!isValidNotification(notification, payload.scheduleRevision)) {
-      continue;
-    }
+  const notifications = payload.notifications.filter((notification) =>
+    isValidNotification(notification, payload.scheduleRevision),
+  );
+  const plan: StoredPlan = {
+    safeUid: payload.safeUid,
+    scheduleRevision: payload.scheduleRevision,
+    telegramEnabled: true,
+    chatId: payload.chatId,
+    notifications,
+    updatedAt: manifest.updatedAt,
+  };
 
-    const stored: StoredNotification = {
-      ...notification,
-      safeUid: payload.safeUid,
-      chatId: payload.chatId,
-      sent: false,
-    };
-    await env.GORANI_NOTIFICATIONS_KV.put(
-      buildNotificationKey(payload.safeUid, payload.scheduleRevision, notification.plannedNotificationId),
-      JSON.stringify(stored),
-      { expirationTtl: STORAGE_TTL_SECONDS },
-    );
-    savedCount += 1;
-  }
+  await env.GORANI_NOTIFICATIONS_KV.put(
+    buildPlanKey(payload.safeUid, payload.scheduleRevision),
+    JSON.stringify(plan),
+    { expirationTtl: STORAGE_TTL_SECONDS },
+  );
 
-  return jsonResponse({ ok: true, savedCount });
+  return jsonResponse({ ok: true, savedCount: notifications.length });
 }
 
 async function handleTest(request: Request, env: Env): Promise<Response> {
@@ -162,17 +165,15 @@ async function runScheduledDispatch(env: Env): Promise<void> {
       continue;
     }
 
-    const notificationKeys = await listKeys(
+    const plan = await getJson<StoredPlan>(
       env.GORANI_NOTIFICATIONS_KV,
-      buildNotificationPrefix(manifest.safeUid, manifest.scheduleRevision),
+      buildPlanKey(manifest.safeUid, manifest.scheduleRevision),
     );
+    if (!plan || !Array.isArray(plan.notifications)) {
+      continue;
+    }
 
-    for (const notificationKey of notificationKeys) {
-      const notification = await getJson<StoredNotification>(env.GORANI_NOTIFICATIONS_KV, notificationKey);
-      if (!notification) {
-        continue;
-      }
-
+    for (const notification of plan.notifications) {
       const sentKey = buildSentKey(
         manifest.safeUid,
         manifest.scheduleRevision,
@@ -182,7 +183,6 @@ async function runScheduledDispatch(env: Env): Promise<void> {
         manifest.telegramEnabled &&
         notification.fireAtEpochMs <= nowMs &&
         notification.scheduleRevision === manifest.scheduleRevision &&
-        notification.sent !== true &&
         !(await env.GORANI_NOTIFICATIONS_KV.get(sentKey));
 
       if (!shouldSend) {
@@ -190,16 +190,11 @@ async function runScheduledDispatch(env: Env): Promise<void> {
       }
 
       try {
-        await sendTelegramMessage(env, notification.chatId || manifest.chatId, formatNotificationMessage(notification));
+        await sendTelegramMessage(env, plan.chatId || manifest.chatId, formatNotificationMessage(notification));
         const sentAt = new Date().toISOString();
         await env.GORANI_NOTIFICATIONS_KV.put(sentKey, JSON.stringify({ sentAt }), {
           expirationTtl: STORAGE_TTL_SECONDS,
         });
-        await env.GORANI_NOTIFICATIONS_KV.put(
-          notificationKey,
-          JSON.stringify({ ...notification, sent: true, sentAt }),
-          { expirationTtl: STORAGE_TTL_SECONDS },
-        );
       } catch (error) {
         console.error("[cron] Telegram send failed.", notification.plannedNotificationId, getErrorMessage(error));
       }
@@ -232,7 +227,7 @@ async function sendTelegramMessage(env: Env, chatId: string, text: string): Prom
   }
 }
 
-function formatNotificationMessage(notification: StoredNotification): string {
+function formatNotificationMessage(notification: TelegramNotificationPayload): string {
   return `🦌 ${notification.title}\n\n${notification.body}`;
 }
 
@@ -271,16 +266,32 @@ function buildManifestKey(safeUid: string): string {
   return `user:${safeUid}:manifest`;
 }
 
+function buildPlanKey(safeUid: string, scheduleRevision: number): string {
+  return `user:${safeUid}:rev:${scheduleRevision}:plan`;
+}
+
 function buildNotificationPrefix(safeUid: string, scheduleRevision: number): string {
   return `user:${safeUid}:rev:${scheduleRevision}:notification:`;
 }
 
-function buildNotificationKey(safeUid: string, scheduleRevision: number, plannedNotificationId: string): string {
-  return `${buildNotificationPrefix(safeUid, scheduleRevision)}${plannedNotificationId}`;
-}
-
 function buildSentKey(safeUid: string, scheduleRevision: number, plannedNotificationId: string): string {
   return `sent:${safeUid}:${scheduleRevision}:${plannedNotificationId}`;
+}
+
+async function deletePlanKey(kv: KVNamespace, safeUid: string, scheduleRevision: number): Promise<void> {
+  await kv.delete(buildPlanKey(safeUid, scheduleRevision));
+}
+
+async function deleteLegacyNotificationPrefixSafely(
+  kv: KVNamespace,
+  safeUid: string,
+  scheduleRevision: number,
+): Promise<void> {
+  try {
+    await deletePrefix(kv, buildNotificationPrefix(safeUid, scheduleRevision));
+  } catch (error) {
+    console.warn("[sync] Failed to delete legacy notification keys.", safeUid, scheduleRevision, getErrorMessage(error));
+  }
 }
 
 async function parseJson<T>(request: Request): Promise<T> {
