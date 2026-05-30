@@ -4,13 +4,15 @@
 // ─────────────────────────────────────────────────────────────────
 
 // ── 이벤트 타입 ─────────────────────────────────────────────────
-export type EventType = "Ex-Div" | "Buy" | "Pay" | "Earn";
+export type EventType = "Ex-Div" | "Buy" | "Pay" | "Earn" | "custom";
+export type EventStatus = "declared" | "estimated";
 
 export const EVENT_COLORS: Record<EventType, string> = {
   "Ex-Div": "#E07B6A",
   Buy: "#C9A96E",
   Pay: "#6AAB82",
   Earn: "#8B6F47",
+  custom: "#4E8FD6",
 };
 
 // ── 캘린더 이벤트 ───────────────────────────────────────────────
@@ -25,26 +27,35 @@ export interface CalendarEvent {
   currentPrice?: number;
   annualYield?: number;
   memo?: string;
+  tickerMemo?: string;
+  customMemo?: string;
+  buyDate?: string;
+  exDate?: string;
+  payDate?: string;
+  taxSaving?: number;
+  taxSavingOnce?: number;
+  taxSavingPer10k?: number;
   star: boolean;
   heart: boolean;
   alertEnabled: boolean;
+  status?: EventStatus;
   customSymbol?: string;
   customTitle?: string;
 }
 
 export const calendarEvents: CalendarEvent[] = [
-  { id: "1",  portfolioName: "배당주", ticker: "APAM",    eventType: "Ex-Div", date: "2026-05-20", shortLabel: "APAM Ex",    dividendAmount: 1.25, currentPrice: 36.8,  annualYield: 13.6, memo: "분기 배당, 전략 미리 확인",   star: true,  heart: false, alertEnabled: true  },
-  { id: "2",  portfolioName: "배당주", ticker: "APAM",    eventType: "Pay",    date: "2026-05-23", shortLabel: "APAM Pay",   dividendAmount: 1.25, currentPrice: 36.8,  annualYield: 13.6, memo: "약 $1.25/주 예상",           star: true,  heart: false, alertEnabled: true  },
-  { id: "3",  portfolioName: "채권성", ticker: "SGOV",    eventType: "Pay",    date: "2026-05-15", shortLabel: "SGOV Pay",   dividendAmount: 0.42, currentPrice: 100.7, annualYield: 5.0,  memo: "월 배당 수령",               star: true,  heart: true,  alertEnabled: true  },
-  { id: "4",  portfolioName: "배당주", ticker: "TROW",    eventType: "Ex-Div", date: "2026-05-28", shortLabel: "TROW Ex",    dividendAmount: 1.24, currentPrice: 102.3, annualYield: 4.8,  memo: "배당금 재투자 고려",          star: false, heart: false, alertEnabled: false },
-  { id: "5",  portfolioName: "나스닥", ticker: "CHRD",    eventType: "Earn",   date: "2026-05-21", shortLabel: "CHRD Earn",  memo: "WTI 흐름 주목",                                                                            star: false, heart: true,  alertEnabled: false },
-  { id: "6",  portfolioName: "기타",  ticker: "장전체크", eventType: "Buy",    date: "2026-05-21", shortLabel: "장전 체크",  memo: "WTI, XLF 확인",                                                                            star: false, heart: false, alertEnabled: false },
-  { id: "7",  portfolioName: "배당주", ticker: "IVZ",     eventType: "Ex-Div", date: "2026-06-05", shortLabel: "IVZ Ex",     dividendAmount: 0.19, currentPrice: 15.2,  annualYield: 5.0,  memo: "배당 수익률 5% 수준",        star: false, heart: false, alertEnabled: false },
-  { id: "8",  portfolioName: "기타",  ticker: "메모",     eventType: "Buy",    date: "2026-05-26", shortLabel: "시장 메모",  memo: "연준 발언 주목",                                            customTitle: "FOMC 체크",       star: false, heart: false, alertEnabled: false },
-  { id: "9",  portfolioName: "배당주", ticker: "CHRD",    eventType: "Ex-Div", date: "2026-06-18", shortLabel: "CHRD Ex",    dividendAmount: 1.25, currentPrice: 118.4, annualYield: 4.2,  memo: "특별배당 가능성",            star: false, heart: true,  alertEnabled: false },
-  { id: "10", portfolioName: "배당주", ticker: "TROW",    eventType: "Pay",    date: "2026-06-01", shortLabel: "TROW Pay",   dividendAmount: 1.24, currentPrice: 102.3, annualYield: 4.8,                                      star: false, heart: false, alertEnabled: false },
-  { id: "11", portfolioName: "배당주", ticker: "IVZ",     eventType: "Pay",    date: "2026-06-12", shortLabel: "IVZ Pay",    dividendAmount: 0.19, currentPrice: 15.2,  annualYield: 5.0,                                      star: false, heart: false, alertEnabled: false },
-  { id: "12", portfolioName: "채권성", ticker: "SGOV",    eventType: "Ex-Div", date: "2026-06-15", shortLabel: "SGOV Ex",    dividendAmount: 0.42, currentPrice: 100.7, annualYield: 5.0,  memo: "6월 배당락",               star: true,  heart: true,  alertEnabled: true  },
+  { id: "1",  portfolioName: "배당주", ticker: "APAM",    eventType: "Ex-Div", date: "2026-05-20", shortLabel: "APAM Ex",    dividendAmount: 1.25, currentPrice: 36.8,  annualYield: 13.6, memo: "분기 배당, 전략 미리 확인",   star: true,  heart: false, alertEnabled: true,  status: "declared" },
+  { id: "2",  portfolioName: "배당주", ticker: "APAM",    eventType: "Pay",    date: "2026-05-23", shortLabel: "APAM Pay",   dividendAmount: 1.25, currentPrice: 36.8,  annualYield: 13.6, memo: "약 $1.25/주 예상",           star: true,  heart: false, alertEnabled: true,  status: "declared" },
+  { id: "3",  portfolioName: "채권성", ticker: "SGOV",    eventType: "Pay",    date: "2026-05-15", shortLabel: "SGOV Pay",   dividendAmount: 0.42, currentPrice: 100.7, annualYield: 5.0,  memo: "월 배당 수령",               star: true,  heart: true,  alertEnabled: true,  status: "declared" },
+  { id: "4",  portfolioName: "배당주", ticker: "TROW",    eventType: "Ex-Div", date: "2026-05-28", shortLabel: "TROW Ex",    dividendAmount: 1.24, currentPrice: 102.3, annualYield: 4.8,  memo: "배당금 재투자 고려",          star: false, heart: false, alertEnabled: false, status: "estimated" },
+  { id: "5",  portfolioName: "나스닥", ticker: "CHRD",    eventType: "Earn",   date: "2026-05-21", shortLabel: "CHRD Earn",  memo: "WTI 흐름 주목",                                                                            star: false, heart: true,  alertEnabled: false, status: "declared" },
+  { id: "6",  portfolioName: "기타",  ticker: "장전체크", eventType: "custom", date: "2026-05-21", shortLabel: "장전 체크",  memo: "WTI, XLF 확인",                                            customTitle: "장전 체크",       star: false, heart: false, alertEnabled: false, status: "declared" },
+  { id: "7",  portfolioName: "배당주", ticker: "IVZ",     eventType: "Ex-Div", date: "2026-06-05", shortLabel: "IVZ Ex",     dividendAmount: 0.19, currentPrice: 15.2,  annualYield: 5.0,  memo: "배당 수익률 5% 수준",        star: false, heart: false, alertEnabled: false, status: "estimated" },
+  { id: "8",  portfolioName: "기타",  ticker: "메모",     eventType: "custom", date: "2026-05-26", shortLabel: "시장 메모",  memo: "연준 발언 주목",                                            customTitle: "FOMC 체크",       star: false, heart: false, alertEnabled: false, status: "declared" },
+  { id: "9",  portfolioName: "배당주", ticker: "CHRD",    eventType: "Ex-Div", date: "2026-06-18", shortLabel: "CHRD Ex",    dividendAmount: 1.25, currentPrice: 118.4, annualYield: 4.2,  memo: "특별배당 가능성",            star: false, heart: true,  alertEnabled: false, status: "estimated" },
+  { id: "10", portfolioName: "배당주", ticker: "TROW",    eventType: "Pay",    date: "2026-06-01", shortLabel: "TROW Pay",   dividendAmount: 1.24, currentPrice: 102.3, annualYield: 4.8,                                      star: false, heart: false, alertEnabled: false, status: "estimated" },
+  { id: "11", portfolioName: "배당주", ticker: "IVZ",     eventType: "Pay",    date: "2026-06-12", shortLabel: "IVZ Pay",    dividendAmount: 0.19, currentPrice: 15.2,  annualYield: 5.0,                                      star: false, heart: false, alertEnabled: false, status: "estimated" },
+  { id: "12", portfolioName: "채권성", ticker: "SGOV",    eventType: "Ex-Div", date: "2026-06-15", shortLabel: "SGOV Ex",    dividendAmount: 0.42, currentPrice: 100.7, annualYield: 5.0,  memo: "6월 배당락",               star: true,  heart: true,  alertEnabled: true,  status: "estimated" },
 ];
 
 // ── 포트폴리오 티커 ──────────────────────────────────────────────
@@ -52,6 +63,7 @@ export interface PortfolioTicker {
   ticker: string;
   name: string;
   portfolioName: string;
+  sector: "금융" | "에너지" | "리츠" | "채권" | "기타";
   memo: string;
   star: boolean;
   heart: boolean;
@@ -60,11 +72,11 @@ export interface PortfolioTicker {
 }
 
 export const portfolioTickers: PortfolioTicker[] = [
-  { ticker: "APAM", name: "Artisan Partners Asset Mgmt", portfolioName: "배당주", memo: "배당락 전날 매도 전략 고려. 분기 배당 수익률 확인 후 결정. 연 수익률 13%대 유지 중.", star: true,  heart: false, alertEnabled: true,  relatedEventCount: 4 },
-  { ticker: "CHRD", name: "Chord Energy Corp",           portfolioName: "배당주", memo: "WTI 흐름 주목. 특별배당 가능성 있음. 에너지 섹터 변동성 체크 필요.",                  star: false, heart: true,  alertEnabled: false, relatedEventCount: 2 },
-  { ticker: "SGOV", name: "iShares 0-3M Treasury ETF",  portfolioName: "SGOV",  memo: "단기 유동성 관리용. 금리 인하 시점에 리밸런싱 예정. 현금 대체로 활용 중.",            star: true,  heart: true,  alertEnabled: true,  relatedEventCount: 3 },
-  { ticker: "TROW", name: "T. Rowe Price Group",         portfolioName: "배당주", memo: "배당금 재투자 고려. 장기 보유 목표. 자산운용사 섹터 장기 안정성 높음.",             star: false, heart: false, alertEnabled: false, relatedEventCount: 3 },
-  { ticker: "IVZ",  name: "Invesco Ltd",                 portfolioName: "관심종목", memo: "배당 수익률 5% 수준. 자산운용사 섹터. 추가 매수 타이밍 검토 중.",             star: false, heart: false, alertEnabled: false, relatedEventCount: 2 },
+  { ticker: "APAM", name: "Artisan Partners Asset Mgmt", portfolioName: "배당주", sector: "금융", memo: "배당락 전날 매도 전략 고려. 분기 배당 수익률 확인 후 결정.", star: true,  heart: false, alertEnabled: true,  relatedEventCount: 4 },
+  { ticker: "CHRD", name: "Chord Energy Corp",           portfolioName: "배당주", sector: "에너지", memo: "WTI 흐름 주목. 특별배당 가능성 있음.",                  star: false, heart: true,  alertEnabled: false, relatedEventCount: 2 },
+  { ticker: "SGOV", name: "iShares 0-3M Treasury ETF",  portfolioName: "SGOV",  sector: "채권", memo: "단기 유동성 관리용. 현금 대체로 활용 중.",            star: true,  heart: true,  alertEnabled: true,  relatedEventCount: 3 },
+  { ticker: "TROW", name: "T. Rowe Price Group",         portfolioName: "배당주", sector: "금융", memo: "배당금 재투자 고려. 장기 보유 목표.",             star: false, heart: false, alertEnabled: false, relatedEventCount: 3 },
+  { ticker: "IVZ",  name: "Invesco Ltd",                 portfolioName: "관심종목", sector: "금융", memo: "배당 수익률 5% 수준. 추가 매수 타이밍 검토 중.",             star: false, heart: false, alertEnabled: false, relatedEventCount: 2 },
 ];
 
 // ── 자산 월별 데이터 ─────────────────────────────────────────────
@@ -249,15 +261,21 @@ export const simulatorResults = {
     { year: 2044, isaWithdrawal: 4200000, pensionWithdrawal: 4800000, totalWithdrawal: 9000000 },
   ],
   dividendAccountTable: [
-    { year: 2024, balance: 8000000, dividendMonthly: 180000 },
-    { year: 2026, balance: 10200000, dividendMonthly: 230000 },
-    { year: 2028, balance: 12800000, dividendMonthly: 288000 },
-    { year: 2030, balance: 15600000, dividendMonthly: 351000 },
-    { year: 2034, balance: 22100000, dividendMonthly: 497000 },
-    { year: 2040, balance: 35500000, dividendMonthly: 799000 },
-    { year: 2044, balance: 46800000, dividendMonthly: 1053000 },
+    { year: 2024, isaBalance: 10000000, pensionBalance: 5000000, generalBalance: 20000000, dividendBalance: 8000000, total: 43000000 },
+    { year: 2026, isaBalance: 12800000, pensionBalance: 7000000, generalBalance: 22000000, dividendBalance: 10200000, total: 52000000 },
+    { year: 2028, isaBalance: 16400000, pensionBalance: 9800000, generalBalance: 24000000, dividendBalance: 12800000, total: 63000000 },
+    { year: 2030, isaBalance: 21000000, pensionBalance: 13600000, generalBalance: 26800000, dividendBalance: 15600000, total: 77000000 },
+    { year: 2034, isaBalance: 32000000, pensionBalance: 22800000, generalBalance: 35100000, dividendBalance: 22100000, total: 112000000 },
+    { year: 2040, isaBalance: 46000000, pensionBalance: 34800000, generalBalance: 58700000, dividendBalance: 35500000, total: 175000000 },
+    { year: 2044, isaBalance: 41000000, pensionBalance: 38900000, generalBalance: 55300000, dividendBalance: 46800000, total: 182000000 },
   ],
 };
+
+export const customLinksData = [
+  { id: "1", title: "배당 캘린더", url: "https://www.nasdaq.com/market-activity/dividends" },
+  { id: "2", title: "환율 체크", url: "https://finance.yahoo.com/quote/KRW=X" },
+  { id: "3", title: "브로커 로그인", url: "https://example.com" },
+];
 
 // ── 계산기 ───────────────────────────────────────────────────────
 export const calculatorData = {
@@ -345,6 +363,104 @@ export const calculatorData = {
     ],
   },
 };
+
+// ── 양도세치기 배당시뮬: 백테스트용 원시 이벤트 ────────────────
+//   Streamlit `pages_app/3_dividend_sim.py` 와 동등한 계산을 위해
+//   ticker별 ex-div 이벤트 + 원시 가격/배당 정보를 보관한다.
+//   buyPrice는 D-1 종가, dividendGross는 세전 1주 배당,
+//   windowMaxHigh는 매도허용기간 내 일봉 고가 최댓값(기본 sellWindow=0 → ex-div 당일 고가),
+//   windowExitClose는 sellWindow 마지막일 종가, recoveryDate는 손익분기점 회복 날짜이다.
+//   (실제 yfinance 응답을 모사한 정적 픽스처)
+export interface DividendCaptureEvent {
+  exDate: string;          // YYYY-MM-DD
+  buyPrice: number;        // D-1 종가 ($)
+  dividendGross: number;   // 세전 1주 배당 ($)
+  windowMaxHigh: number;   // 매도 허용기간 내 일봉 고가 최댓값
+  windowExitClose: number; // 매도 허용기간 마지막일 종가
+  recoveryDate?: string;   // 손익분기점 첫 회복일 (없으면 "" 또는 미설정)
+  recoveryTradingDays?: number;
+  recoveryCalendarDays?: number;
+}
+
+export const dividendCaptureFixtures: Record<string, DividendCaptureEvent[]> = {
+  APAM: [
+    { exDate: "2019-02-13", buyPrice: 23.10, dividendGross: 0.69, windowMaxHigh: 23.40, windowExitClose: 22.80, recoveryDate: "2019-02-25", recoveryTradingDays: 8, recoveryCalendarDays: 12 },
+    { exDate: "2019-05-14", buyPrice: 26.50, dividendGross: 0.69, windowMaxHigh: 27.10, windowExitClose: 26.40 },
+    { exDate: "2019-08-13", buyPrice: 28.80, dividendGross: 0.66, windowMaxHigh: 28.95, windowExitClose: 28.30, recoveryDate: "2019-08-22", recoveryTradingDays: 7, recoveryCalendarDays: 9 },
+    { exDate: "2019-11-12", buyPrice: 31.20, dividendGross: 0.69, windowMaxHigh: 31.60, windowExitClose: 30.85 },
+    { exDate: "2020-02-12", buyPrice: 33.80, dividendGross: 0.71, windowMaxHigh: 33.40, windowExitClose: 32.10, recoveryDate: "2020-06-08", recoveryTradingDays: 80, recoveryCalendarDays: 117 },
+    { exDate: "2020-05-12", buyPrice: 22.90, dividendGross: 0.62, windowMaxHigh: 23.40, windowExitClose: 22.10 },
+    { exDate: "2020-08-12", buyPrice: 33.50, dividendGross: 0.61, windowMaxHigh: 33.95, windowExitClose: 32.95 },
+    { exDate: "2020-11-12", buyPrice: 44.10, dividendGross: 0.74, windowMaxHigh: 44.85, windowExitClose: 43.40 },
+    { exDate: "2021-02-12", buyPrice: 49.20, dividendGross: 0.96, windowMaxHigh: 49.40, windowExitClose: 47.95, recoveryDate: "2021-02-23", recoveryTradingDays: 7, recoveryCalendarDays: 11 },
+    { exDate: "2021-03-15", buyPrice: 50.80, dividendGross: 1.40, windowMaxHigh: 51.55, windowExitClose: 49.65 },
+    { exDate: "2021-05-13", buyPrice: 53.90, dividendGross: 0.92, windowMaxHigh: 54.45, windowExitClose: 53.20 },
+    { exDate: "2021-06-14", buyPrice: 53.10, dividendGross: 1.13, windowMaxHigh: 53.05, windowExitClose: 52.10, recoveryDate: "2021-09-08", recoveryTradingDays: 60, recoveryCalendarDays: 86 },
+    { exDate: "2021-08-12", buyPrice: 49.80, dividendGross: 1.02, windowMaxHigh: 50.20, windowExitClose: 49.15 },
+    { exDate: "2021-09-13", buyPrice: 47.20, dividendGross: 1.40, windowMaxHigh: 47.95, windowExitClose: 46.70 },
+    { exDate: "2021-11-12", buyPrice: 49.60, dividendGross: 0.91, windowMaxHigh: 50.10, windowExitClose: 48.95, recoveryDate: "2021-11-22", recoveryTradingDays: 6, recoveryCalendarDays: 10 },
+    { exDate: "2022-02-11", buyPrice: 47.85, dividendGross: 0.97, windowMaxHigh: 47.40, windowExitClose: 45.20, recoveryDate: "2023-04-04", recoveryTradingDays: 285, recoveryCalendarDays: 417 },
+    { exDate: "2022-03-14", buyPrice: 41.20, dividendGross: 1.45, windowMaxHigh: 41.55, windowExitClose: 40.10 },
+    { exDate: "2022-05-13", buyPrice: 36.40, dividendGross: 0.79, windowMaxHigh: 36.05, windowExitClose: 33.85 },
+    { exDate: "2022-06-13", buyPrice: 31.50, dividendGross: 0.97, windowMaxHigh: 32.55, windowExitClose: 31.05 },
+    { exDate: "2022-08-12", buyPrice: 32.80, dividendGross: 0.66, windowMaxHigh: 33.10, windowExitClose: 32.05 },
+    { exDate: "2022-09-13", buyPrice: 28.30, dividendGross: 1.13, windowMaxHigh: 28.05, windowExitClose: 26.40, recoveryDate: "2023-01-31", recoveryTradingDays: 96, recoveryCalendarDays: 140 },
+    { exDate: "2022-11-14", buyPrice: 32.40, dividendGross: 0.66, windowMaxHigh: 32.85, windowExitClose: 31.95 },
+    { exDate: "2023-02-13", buyPrice: 36.10, dividendGross: 0.71, windowMaxHigh: 36.40, windowExitClose: 35.30 },
+    { exDate: "2023-03-13", buyPrice: 35.20, dividendGross: 1.24, windowMaxHigh: 34.95, windowExitClose: 32.50, recoveryDate: "2023-06-15", recoveryTradingDays: 65, recoveryCalendarDays: 94 },
+    { exDate: "2023-05-12", buyPrice: 34.80, dividendGross: 0.62, windowMaxHigh: 35.20, windowExitClose: 34.15 },
+    { exDate: "2023-08-11", buyPrice: 39.40, dividendGross: 0.61, windowMaxHigh: 39.85, windowExitClose: 38.95 },
+    { exDate: "2023-09-12", buyPrice: 39.95, dividendGross: 1.31, windowMaxHigh: 40.30, windowExitClose: 39.10 },
+    { exDate: "2023-11-13", buyPrice: 38.20, dividendGross: 0.66, windowMaxHigh: 38.65, windowExitClose: 37.80, recoveryDate: "2023-11-21", recoveryTradingDays: 6, recoveryCalendarDays: 8 },
+    { exDate: "2024-02-12", buyPrice: 41.10, dividendGross: 0.71, windowMaxHigh: 41.55, windowExitClose: 40.50 },
+    { exDate: "2024-03-11", buyPrice: 41.85, dividendGross: 1.40, windowMaxHigh: 42.30, windowExitClose: 41.10 },
+    { exDate: "2024-05-13", buyPrice: 39.60, dividendGross: 0.71, windowMaxHigh: 40.05, windowExitClose: 39.10 },
+    { exDate: "2024-08-12", buyPrice: 41.20, dividendGross: 0.71, windowMaxHigh: 41.55, windowExitClose: 40.30 },
+    { exDate: "2024-09-13", buyPrice: 41.80, dividendGross: 1.31, windowMaxHigh: 41.65, windowExitClose: 40.10, recoveryDate: "2024-11-19", recoveryTradingDays: 46, recoveryCalendarDays: 67 },
+    { exDate: "2024-11-12", buyPrice: 40.30, dividendGross: 0.71, windowMaxHigh: 40.95, windowExitClose: 39.85 },
+    { exDate: "2025-02-12", buyPrice: 37.90, dividendGross: 0.71, windowMaxHigh: 38.20, windowExitClose: 36.85 },
+    { exDate: "2025-03-13", buyPrice: 36.20, dividendGross: 1.31, windowMaxHigh: 36.05, windowExitClose: 34.10, recoveryDate: "2025-08-22", recoveryTradingDays: 110, recoveryCalendarDays: 162 },
+    { exDate: "2025-05-13", buyPrice: 33.80, dividendGross: 0.68, windowMaxHigh: 34.40, windowExitClose: 33.10 },
+    { exDate: "2025-08-13", buyPrice: 36.40, dividendGross: 0.68, windowMaxHigh: 36.95, windowExitClose: 35.85, recoveryDate: "2025-08-21", recoveryTradingDays: 5, recoveryCalendarDays: 8 },
+    { exDate: "2025-09-12", buyPrice: 35.90, dividendGross: 1.25, windowMaxHigh: 36.10, windowExitClose: 34.65 },
+    { exDate: "2025-11-12", buyPrice: 36.50, dividendGross: 0.68, windowMaxHigh: 37.05, windowExitClose: 36.20 },
+    { exDate: "2026-02-12", buyPrice: 36.10, dividendGross: 0.68, windowMaxHigh: 36.55, windowExitClose: 35.65 },
+    { exDate: "2026-03-12", buyPrice: 35.40, dividendGross: 1.25, windowMaxHigh: 35.95, windowExitClose: 35.10 },
+    { exDate: "2026-05-13", buyPrice: 36.80, dividendGross: 0.68, windowMaxHigh: 37.20, windowExitClose: 36.40 },
+  ],
+  ARCC: [
+    { exDate: "2019-03-13", buyPrice: 17.50, dividendGross: 0.40, windowMaxHigh: 17.65, windowExitClose: 17.25, recoveryDate: "2019-03-21", recoveryTradingDays: 6, recoveryCalendarDays: 8 },
+    { exDate: "2019-06-12", buyPrice: 18.10, dividendGross: 0.40, windowMaxHigh: 18.30, windowExitClose: 17.95 },
+    { exDate: "2019-09-13", buyPrice: 19.20, dividendGross: 0.40, windowMaxHigh: 19.45, windowExitClose: 18.95, recoveryDate: "2019-09-23", recoveryTradingDays: 7, recoveryCalendarDays: 10 },
+    { exDate: "2019-12-12", buyPrice: 18.80, dividendGross: 0.40, windowMaxHigh: 19.05, windowExitClose: 18.50 },
+    { exDate: "2020-03-12", buyPrice: 16.20, dividendGross: 0.40, windowMaxHigh: 15.80, windowExitClose: 14.10, recoveryDate: "2020-06-30", recoveryTradingDays: 76, recoveryCalendarDays: 110 },
+    { exDate: "2020-06-12", buyPrice: 12.40, dividendGross: 0.40, windowMaxHigh: 12.65, windowExitClose: 12.30 },
+    { exDate: "2020-09-15", buyPrice: 14.80, dividendGross: 0.40, windowMaxHigh: 15.05, windowExitClose: 14.60 },
+    { exDate: "2020-12-15", buyPrice: 17.40, dividendGross: 0.40, windowMaxHigh: 17.65, windowExitClose: 17.30 },
+    { exDate: "2021-03-15", buyPrice: 18.90, dividendGross: 0.40, windowMaxHigh: 19.20, windowExitClose: 18.85 },
+    { exDate: "2021-06-15", buyPrice: 19.50, dividendGross: 0.41, windowMaxHigh: 19.85, windowExitClose: 19.40 },
+    { exDate: "2021-09-15", buyPrice: 20.40, dividendGross: 0.41, windowMaxHigh: 20.85, windowExitClose: 20.40 },
+    { exDate: "2021-12-15", buyPrice: 20.90, dividendGross: 0.43, windowMaxHigh: 21.20, windowExitClose: 20.85 },
+    { exDate: "2022-03-15", buyPrice: 19.80, dividendGross: 0.42, windowMaxHigh: 20.05, windowExitClose: 19.55 },
+    { exDate: "2022-06-15", buyPrice: 19.10, dividendGross: 0.42, windowMaxHigh: 18.95, windowExitClose: 18.40, recoveryDate: "2022-09-12", recoveryTradingDays: 64, recoveryCalendarDays: 89 },
+    { exDate: "2022-09-15", buyPrice: 19.20, dividendGross: 0.42, windowMaxHigh: 19.45, windowExitClose: 19.05 },
+    { exDate: "2022-12-15", buyPrice: 19.60, dividendGross: 0.45, windowMaxHigh: 19.95, windowExitClose: 19.55 },
+    { exDate: "2023-03-15", buyPrice: 18.40, dividendGross: 0.48, windowMaxHigh: 18.65, windowExitClose: 18.20 },
+    { exDate: "2023-06-15", buyPrice: 19.30, dividendGross: 0.48, windowMaxHigh: 19.65, windowExitClose: 19.25 },
+    { exDate: "2023-09-15", buyPrice: 19.80, dividendGross: 0.48, windowMaxHigh: 20.10, windowExitClose: 19.65 },
+    { exDate: "2023-12-15", buyPrice: 20.40, dividendGross: 0.48, windowMaxHigh: 20.85, windowExitClose: 20.45 },
+    { exDate: "2024-03-15", buyPrice: 21.10, dividendGross: 0.48, windowMaxHigh: 21.45, windowExitClose: 21.05 },
+    { exDate: "2024-06-14", buyPrice: 20.80, dividendGross: 0.48, windowMaxHigh: 21.10, windowExitClose: 20.65 },
+    { exDate: "2024-09-13", buyPrice: 21.50, dividendGross: 0.48, windowMaxHigh: 21.85, windowExitClose: 21.40 },
+    { exDate: "2024-12-13", buyPrice: 21.80, dividendGross: 0.48, windowMaxHigh: 22.10, windowExitClose: 21.65 },
+    { exDate: "2025-03-14", buyPrice: 21.20, dividendGross: 0.48, windowMaxHigh: 21.45, windowExitClose: 21.05 },
+    { exDate: "2025-06-13", buyPrice: 21.60, dividendGross: 0.48, windowMaxHigh: 21.85, windowExitClose: 21.50 },
+    { exDate: "2025-09-12", buyPrice: 22.10, dividendGross: 0.48, windowMaxHigh: 22.45, windowExitClose: 22.05 },
+    { exDate: "2025-12-12", buyPrice: 22.40, dividendGross: 0.48, windowMaxHigh: 22.75, windowExitClose: 22.30 },
+    { exDate: "2026-03-13", buyPrice: 22.10, dividendGross: 0.48, windowMaxHigh: 22.40, windowExitClose: 21.95 },
+  ],
+};
+
 
 // ── 홈 요약 ──────────────────────────────────────────────────────
 export const homeSummary = {

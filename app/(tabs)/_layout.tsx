@@ -59,6 +59,13 @@ function ClassicTabLayout() {
         name="calculator"
         options={{ title: "계산기", tabBarIcon: ({ color }) => <Feather name="percent" size={21} color={color} /> }}
       />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "알림",
+          tabBarIcon: ({ color }) => <Feather name="bell" size={21} color={color} />,
+        }}
+      />
       {/* 탭 바에 표시하지 않는 화면 */}
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="watchlist" options={{ href: null }} />

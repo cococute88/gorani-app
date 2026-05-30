@@ -1,24 +1,30 @@
 {
   "expo": {
-    "name": "고라니 투자비서",
+    "name": "고라니 파이낸스",
     "slug": "gorani-assistant",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon-gorani.png",
     "scheme": "gorani-assistant",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/native-splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FAF7F2"
+      "backgroundColor": "#F5F1E8"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.gorani.finance.assistant"
     },
     "android": {
       "package": "com.gorani.finance.assistant",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "icon": "./assets/images/icon-gorani.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon-gorani.png",
+        "backgroundColor": "#F5F1E8"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -32,11 +38,35 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F5F1E8",
+          "image": "./assets/images/native-splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff"
+        }
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://replit.com/"
+      },
+      "eas": {
+        "projectId": "4a8aae86-e8be-4d57-9069-e7c2ff8437cd"
+      }
     }
   }
 }

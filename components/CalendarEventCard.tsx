@@ -8,6 +8,7 @@ const EVENT_TYPE_LABELS: Record<EventType, string> = {
   Pay: "배당 입금 예상",
   Buy: "매수/체크",
   Earn: "실적/메모",
+  custom: "커스텀",
 };
 
 const EVENT_COLORS: Record<EventType, string> = {
@@ -15,6 +16,7 @@ const EVENT_COLORS: Record<EventType, string> = {
   Pay: "#6AAB82",
   Buy: "#C9A96E",
   Earn: "#8B6F47",
+  custom: "#4E8FD6",
 };
 
 interface CalendarEventCardProps {
