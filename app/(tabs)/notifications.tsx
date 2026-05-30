@@ -404,10 +404,22 @@ function DateRuleEditor({
   return (
     <View style={[styles.ruleCard, { borderColor: colors.border, backgroundColor: colors.muted }]}>
       <View style={styles.ruleHeader}>
-        <SwitchRow label="규칙 사용" value={rule.enabled} onValueChange={(value) => updateBase({ enabled: value })} />
-        <Pressable onPress={onRemove} hitSlop={8}>
-          <Feather name="trash-2" size={18} color={colors.destructive} />
-        </Pressable>
+        <View style={styles.ruleTitleActions}>
+          <Text style={[styles.rowLabel, styles.ruleHeaderLabel, { color: colors.text }]}>규칙 사용</Text>
+          <Pressable
+            accessibilityLabel="날짜 기반 알림 규칙 삭제"
+            accessibilityRole="button"
+            hitSlop={6}
+            onPress={onRemove}
+            style={[
+              styles.ruleDeleteButton,
+              { borderColor: colors.destructive + "24", backgroundColor: colors.destructive + "0D" },
+            ]}
+          >
+            <Feather name="trash-2" size={14} color={colors.destructive} />
+          </Pressable>
+        </View>
+        <Switch value={rule.enabled} onValueChange={(value) => updateBase({ enabled: value })} trackColor={{ true: colors.primary, false: colors.border }} />
       </View>
 
       <ChoiceRow
@@ -652,6 +664,9 @@ const styles = StyleSheet.create({
   multilineInput: { minHeight: 76, textAlignVertical: "top" },
   ruleCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 12 },
   ruleHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  ruleTitleActions: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  ruleHeaderLabel: { flex: 0 },
+  ruleDeleteButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   choiceButton: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   choiceText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },

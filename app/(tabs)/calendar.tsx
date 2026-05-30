@@ -839,16 +839,14 @@ export default function CalendarScreen() {
                           </View>
                           <View style={styles.memoEditBlock}>
                             <Text style={[styles.editLabel, { color: colors.textSub }]}>종목 메모</Text>
-                            <TextInput
-                              value={memo}
-                              onChangeText={(text) => {
-                                handleTickerMemoChange(event.ticker, text);
-                                void persistTickerMemo(event.ticker, text);
-                              }}
-                              placeholder="종목 메모"
-                              placeholderTextColor={colors.textSub}
-                              style={[styles.editInput, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
-                            />
+                            <View style={styles.memoReadonlyBox}>
+                              <Text
+                                selectable
+                                style={[styles.memoReadonlyText, { color: memo.trim().length > 0 ? colors.text : colors.textSub }]}
+                              >
+                                {memo.trim().length > 0 ? memo : "등록된 종목 메모가 없어요."}
+                              </Text>
+                            </View>
                           </View>
                         </>
                       )}
@@ -1428,6 +1426,21 @@ const styles = StyleSheet.create({
   compactInfoLabel: { fontSize: 9, fontFamily: "Inter_600SemiBold" },
   compactInfoValue: { fontSize: 11, fontFamily: "Inter_700Bold" },
   memoEditBlock: { gap: 6 },
+  memoReadonlyBox: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 10,
+    borderColor: "rgba(180, 146, 93, 0.14)",
+    backgroundColor: "#F7F1E6",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    justifyContent: "center",
+  },
+  memoReadonlyText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: "Inter_500Medium",
+  },
   editLabel: { fontSize: 11, fontFamily: "Inter_700Bold" },
   editInput: {
     minHeight: 40,
