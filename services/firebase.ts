@@ -8,8 +8,7 @@ let cachedApp: FirebaseApp | null = null;
 let cachedAuth: Auth | null = null;
 let cachedDb: Database | null = null;
 
-function requiredEnv(name: string): string {
-  const value = process.env[name];
+function requiredConfigValue(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(`Firebase 설정값 누락: ${name}. README의 Firebase 설정 단계를 확인해 주세요.`);
   }
@@ -18,13 +17,19 @@ function requiredEnv(name: string): string {
 
 function getFirebaseConfig(): FirebaseOptions {
   return {
-    apiKey: requiredEnv("EXPO_PUBLIC_FIREBASE_API_KEY"),
-    authDomain: requiredEnv("EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN"),
-    databaseURL: requiredEnv("EXPO_PUBLIC_FIREBASE_DATABASE_URL"),
-    projectId: requiredEnv("EXPO_PUBLIC_FIREBASE_PROJECT_ID"),
-    storageBucket: requiredEnv("EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET"),
-    messagingSenderId: requiredEnv("EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
-    appId: requiredEnv("EXPO_PUBLIC_FIREBASE_APP_ID"),
+    apiKey: requiredConfigValue("EXPO_PUBLIC_FIREBASE_API_KEY", process.env.EXPO_PUBLIC_FIREBASE_API_KEY),
+    authDomain: requiredConfigValue("EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN", process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN),
+    databaseURL: requiredConfigValue("EXPO_PUBLIC_FIREBASE_DATABASE_URL", process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL),
+    projectId: requiredConfigValue("EXPO_PUBLIC_FIREBASE_PROJECT_ID", process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID),
+    storageBucket: requiredConfigValue(
+      "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET",
+      process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    ),
+    messagingSenderId: requiredConfigValue(
+      "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+      process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    ),
+    appId: requiredConfigValue("EXPO_PUBLIC_FIREBASE_APP_ID", process.env.EXPO_PUBLIC_FIREBASE_APP_ID),
   };
 }
 
