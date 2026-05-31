@@ -1,11 +1,13 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Circle, Line, Polygon, Polyline } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 
 export interface LinePoint {
   label: string;
   value: number;
   value2?: number;
+  tooltip?: string;
 }
 
 interface MiniLineChartProps {
@@ -16,6 +18,14 @@ interface MiniLineChartProps {
   label2?: string;
   height?: number;
   formatValue?: (v: number) => string;
+  averageValue?: number;
+  averageLabel?: string;
+  showArea?: boolean;
+  tooltipLabel?: string;
+  showYAxis?: boolean;
+  yAxisTicks?: number;
+  showRange?: boolean;
+  noTooltip?: boolean;
 }
 
 export function MiniLineChart({
@@ -26,17 +36,59 @@ export function MiniLineChart({
   label2,
   height = 100,
   formatValue,
+  averageValue,
+  averageLabel,
+  showArea = true,
+  tooltipLabel = label1,
+  showYAxis = false,
+  yAxisTicks = 5,
+  showRange = true,
+  noTooltip = false,
 }: MiniLineChartProps) {
   const colors = useColors();
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const c1 = color1 ?? colors.primary;
   const c2 = color2 ?? colors.positive;
 
   const allValues = data.flatMap((d) => [d.value, ...(d.value2 !== undefined ? [d.value2] : [])]);
-  const maxVal = Math.max(...allValues, 1);
-  const minVal = Math.min(...allValues, 0);
+  const rawMax = Math.max(...allValues, 1);
+  const rawMin = Math.min(...allValues, 0);
+  const dataMax = Math.max(...allValues);
+  const dataMin = Math.min(...allValues);
+  const dataRange = dataMax - dataMin || Math.max(Math.abs(dataMax) * 0.1, 0.001);
+  const maxVal = showYAxis ? dataMax + dataRange * 0.08 : rawMax;
+  const minVal = showYAxis ? dataMin - dataRange * 0.08 : rawMin;
   const range = maxVal - minVal || 1;
 
-  const pct = (v: number) => ((v - minVal) / range) * 100;
+  const chartW = 320;
+  const chartH = height;
+  const padX = 12;
+  const padY = 10;
+  const innerW = chartW - padX * 2;
+  const innerH = chartH - padY * 2;
+
+  const point = (v: number, i: number) => {
+    const divisor = Math.max(data.length - 1, 1);
+    const x = padX + (i / divisor) * innerW;
+    const y = padY + (1 - (v - minVal) / range) * innerH;
+    return { x, y };
+  };
+
+  const points1 = data.map((pt, i) => point(pt.value, i));
+  const points2 = data.map((pt, i) => (pt.value2 !== undefined ? point(pt.value2, i) : null)).filter(Boolean) as { x: number; y: number }[];
+  const polyline1 = points1.map((p) => `${p.x},${p.y}`).join(" ");
+  const polyline2 = points2.map((p) => `${p.x},${p.y}`).join(" ");
+  const area1 = `${padX},${chartH - padY} ${polyline1} ${chartW - padX},${chartH - padY}`;
+  const avgY = averageValue === undefined ? null : point(averageValue, 0).y;
+  const tickCount = Math.max(2, yAxisTicks);
+  const yTicks = Array.from({ length: tickCount }, (_, i) => {
+    const ratio = i / (tickCount - 1);
+    return {
+      ratio,
+      value: maxVal - range * ratio,
+      y: padY + innerH * ratio,
+    };
+  });
 
   const fmt = formatValue ?? ((v: number) => {
     if (v >= 100000000) return `${(v / 100000000).toFixed(1)}억`;
@@ -60,51 +112,79 @@ export function MiniLineChart({
         )}
       </View>
 
-      {/* Chart area */}
-      <View style={[styles.chartArea, { height }]}>
-        {/* Horizontal guide lines */}
-        {[0, 25, 50, 75, 100].map((p) => (
-          <View
-            key={p}
-            style={[
-              styles.guideLine,
-              { bottom: `${p}%` as `${number}%`, borderColor: colors.border },
-            ]}
-          />
-        ))}
-
-        {/* Dots for line 1 */}
-        {data.map((pt, i) => (
-          <View
-            key={`d1-${i}`}
-            style={[
-              styles.dot,
-              {
-                left: `${(i / (data.length - 1)) * 92 + 4}%` as `${number}%`,
-                bottom: `${pct(pt.value)}%` as `${number}%`,
-                backgroundColor: c1,
-              },
-            ]}
-          />
-        ))}
-
-        {/* Dots for line 2 */}
-        {data.map((pt, i) =>
-          pt.value2 !== undefined ? (
+      <View style={styles.chartRow}>
+        {showYAxis ? (
+          <View style={[styles.yAxis, { height }]}>
+            {yTicks.map((tick) => (
+              <Text key={tick.ratio} style={[styles.yAxisText, { color: colors.textSub }]}>
+                {fmt(tick.value)}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        <View style={[styles.chartArea, { height }]}>
+          <Svg width="100%" height={height} viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none">
+            {yTicks.map((tick) => (
+              <Line
+                key={tick.ratio}
+                x1={0}
+                x2={chartW}
+                y1={tick.y}
+                y2={tick.y}
+                stroke={colors.border}
+                strokeDasharray="4 4"
+                strokeWidth={1}
+              />
+            ))}
+            {showArea && <Polygon points={area1} fill={c1} opacity={0.1} />}
+            {avgY !== null && (
+              <Line x1={padX} x2={chartW - padX} y1={avgY} y2={avgY} stroke={colors.secondary} strokeDasharray="6 4" strokeWidth={1.4} />
+            )}
+            <Polyline points={polyline1} fill="none" stroke={c1} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+            {polyline2 ? <Polyline points={polyline2} fill="none" stroke={c2} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" /> : null}
+            {points1.map((p, i) => <Circle key={`d1-${i}`} cx={p.x} cy={p.y} r={3.5} fill={c1} />)}
+            {points2.map((p, i) => <Circle key={`d2-${i}`} cx={p.x} cy={p.y} r={3.2} fill={c2} />)}
+          </Svg>
+          {!noTooltip && data.map((pt, i) => {
+            const p = points1[i];
+            return (
+              <Pressable
+                key={`hit-${i}`}
+                onPress={() => setSelectedIdx(i)}
+                onHoverIn={() => setSelectedIdx(i)}
+                style={[
+                  styles.hitPoint,
+                  {
+                    left: `${(p.x / chartW) * 100}%` as `${number}%`,
+                    top: `${(p.y / chartH) * 100}%` as `${number}%`,
+                  },
+                ]}
+              />
+            );
+          })}
+          {!noTooltip && selectedIdx !== null && data[selectedIdx] && (
             <View
-              key={`d2-${i}`}
+              pointerEvents="none"
               style={[
-                styles.dot,
+                styles.tooltip,
                 {
-                  left: `${(i / (data.length - 1)) * 92 + 4}%` as `${number}%`,
-                  bottom: `${pct(pt.value2)}%` as `${number}%`,
-                  backgroundColor: c2,
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  left: `${Math.min(Math.max((points1[selectedIdx].x / chartW) * 100, 18), 66)}%` as `${number}%`,
+                  top: points1[selectedIdx].y < chartH / 2 ? 42 : 8,
                 },
               ]}
-            />
-          ) : null
-        )}
+            >
+              <Text style={[styles.tooltipText, { color: colors.text }]}>
+                {data[selectedIdx].tooltip ?? `${data[selectedIdx].label} · ${tooltipLabel} ${fmt(data[selectedIdx].value)}`}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
+      {averageValue !== undefined && averageLabel ? (
+        <Text style={[styles.avgLabel, { color: colors.secondary }]}>{averageLabel}</Text>
+      ) : null}
 
       {/* X-axis labels */}
       <View style={styles.xAxis}>
@@ -117,11 +197,12 @@ export function MiniLineChart({
           ))}
       </View>
 
-      {/* Min / Max indicators */}
-      <View style={styles.range}>
-        <Text style={[styles.rangeText, { color: colors.textSub }]}>{fmt(minVal)}</Text>
-        <Text style={[styles.rangeText, { color: colors.textSub }]}>{fmt(maxVal)}</Text>
-      </View>
+      {showRange ? (
+        <View style={styles.range}>
+          <Text style={[styles.rangeText, { color: colors.textSub }]}>{fmt(minVal)}</Text>
+          <Text style={[styles.rangeText, { color: colors.textSub }]}>{fmt(maxVal)}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -132,27 +213,38 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  chartRow: { flexDirection: "row", alignItems: "stretch", gap: 4 },
+  yAxis: { width: 34, justifyContent: "space-between", alignItems: "flex-end", paddingVertical: 4 },
+  yAxisText: { fontSize: 8, fontFamily: "Inter_400Regular" },
   chartArea: {
+    flex: 1,
     position: "relative",
     borderRadius: 8,
     overflow: "hidden",
   },
-  guideLine: {
+  hitPoint: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    height: 1,
-    borderWidth: 0.5,
-    borderStyle: "dashed",
+    width: 32,
+    height: 32,
+    marginLeft: -16,
+    marginTop: -16,
+    borderRadius: 16,
   },
-  dot: {
+  tooltip: {
     position: "absolute",
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginLeft: -3.5,
-    marginBottom: -3.5,
+    maxWidth: 190,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    shadowColor: "#3D2B1F",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
+  tooltipText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  avgLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", alignSelf: "flex-end" },
   xAxis: { flexDirection: "row", justifyContent: "space-between" },
   xLabel: { fontSize: 9, fontFamily: "Inter_400Regular" },
   range: { flexDirection: "row", justifyContent: "space-between" },

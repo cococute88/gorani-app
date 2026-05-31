@@ -1,5 +1,5 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 
 export interface ScatterPoint {
@@ -8,6 +8,7 @@ export interface ScatterPoint {
   y: number;  // 0-100
   success: boolean;
   label?: string;
+  tooltip?: string;
 }
 
 interface ScatterPlotProps {
@@ -19,8 +20,11 @@ interface ScatterPlotProps {
 
 export function ScatterPlot({ data, height = 160, xLabel = "기간", yLabel = "수익률" }: ScatterPlotProps) {
   const colors = useColors();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const successCount = data.filter((d) => d.success).length;
   const failCount = data.length - successCount;
+  const selected = data.find((point) => point.id === selectedId);
+  const xAxisLabels = buildXAxisLabels(data);
 
   return (
     <View style={styles.container}>
@@ -67,8 +71,10 @@ export function ScatterPlot({ data, height = 160, xLabel = "기간", yLabel = "�
 
           {/* Scatter dots */}
           {data.map((pt) => (
-            <View
+            <Pressable
               key={pt.id}
+              onPress={() => setSelectedId(pt.id)}
+              onHoverIn={() => setSelectedId(pt.id)}
               style={[
                 styles.dot,
                 {
@@ -79,13 +85,58 @@ export function ScatterPlot({ data, height = 160, xLabel = "기간", yLabel = "�
               ]}
             />
           ))}
+          {selected ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.tooltip,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  left: `${Math.min(Math.max(selected.x, 18), 62)}%` as `${number}%`,
+                  top: selected.y > 58 ? 12 : height - 48,
+                },
+              ]}
+            >
+              <Text style={[styles.tooltipText, { color: colors.text }]}>
+                {selected.tooltip ?? `${selected.label ?? selected.id} · 수익률 ${selected.y.toFixed(1)}% · ${selected.success ? "성공" : "실패"}`}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* X axis */}
+        {xAxisLabels.length > 0 ? (
+          <View style={styles.xTickRow}>
+            {xAxisLabels.map((label) => (
+              <Text key={label} style={[styles.xTickText, { color: colors.textSub }]}>
+                {label}
+              </Text>
+            ))}
+          </View>
+        ) : null}
         <Text style={[styles.xLabel, { color: colors.textSub }]}>{xLabel}</Text>
       </View>
     </View>
   );
+}
+
+function buildXAxisLabels(data: ScatterPoint[]) {
+  const labels = data
+    .map((point) => formatAxisDate(point.label))
+    .filter((label): label is string => Boolean(label));
+  const uniqueLabels = Array.from(new Set(labels));
+  if (uniqueLabels.length <= 5) return uniqueLabels;
+  const step = Math.ceil(uniqueLabels.length / 5);
+  return uniqueLabels.filter((_, index) => index % step === 0 || index === uniqueLabels.length - 1);
+}
+
+function formatAxisDate(label?: string) {
+  if (!label) return null;
+  const match = label.match(/^(\d{2}|\d{4})-(\d{2})/);
+  if (!match) return null;
+  const year = match[1].slice(-2);
+  return `${year}-${match[2]}`;
 }
 
 const styles = StyleSheet.create({
@@ -122,11 +173,29 @@ const styles = StyleSheet.create({
   },
   dot: {
     position: "absolute",
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    marginLeft: -4.5,
-    marginBottom: -4.5,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    marginLeft: -7.5,
+    marginBottom: -7.5,
+    borderWidth: 2,
+    borderColor: "#FFF",
   },
+  tooltip: {
+    position: "absolute",
+    maxWidth: 210,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    shadowColor: "#3D2B1F",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tooltipText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  xTickRow: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4 },
+  xTickText: { fontSize: 9, fontFamily: "Inter_500Medium" },
   xLabel: { fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
 });
