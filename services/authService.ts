@@ -1,5 +1,5 @@
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut } from "@firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut, type User } from "@firebase/auth";
 
 import { getFirebaseAuth } from "@/services/firebase";
 
@@ -16,6 +16,18 @@ type GoogleSignInResultLike = {
     idToken?: string | null;
   } | null;
 };
+
+export function toAuthUserInfo(user: User | null): AuthUserInfo | null {
+  if (!user?.email) {
+    return null;
+  }
+
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+  };
+}
 
 function getGoogleWebClientId(): string {
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
@@ -108,17 +120,7 @@ export async function signOutFromGoogle(): Promise<void> {
 export function getCurrentAuthUser(): AuthUserInfo | null {
   try {
     const firebaseAuth = getFirebaseAuth();
-    const currentUser = firebaseAuth.currentUser;
-
-    if (!currentUser?.email) {
-      return null;
-    }
-
-    return {
-      uid: currentUser.uid,
-      email: currentUser.email,
-      displayName: currentUser.displayName,
-    };
+    return toAuthUserInfo(firebaseAuth.currentUser);
   } catch (error) {
     console.error("[authService] 현재 로그인 사용자 조회 실패:", error);
     return null;

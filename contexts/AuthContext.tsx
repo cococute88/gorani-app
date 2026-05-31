@@ -1,6 +1,14 @@
-import React, { createContext, useMemo, useState } from "react";
+import React, { createContext, useEffect, useMemo, useState } from "react";
+import { onAuthStateChanged } from "@firebase/auth";
 
-import { getCurrentAuthUser, signInWithGoogle, signOutFromGoogle, type AuthUserInfo } from "@/services/authService";
+import { getFirebaseAuth } from "@/services/firebase";
+import {
+  getCurrentAuthUser,
+  signInWithGoogle,
+  signOutFromGoogle,
+  toAuthUserInfo,
+  type AuthUserInfo,
+} from "@/services/authService";
 
 type AuthContextValue = {
   user: AuthUserInfo | null;
@@ -13,15 +21,38 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUserInfo | null>(() => {
+  const [user, setUser] = useState<AuthUserInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
     try {
-      return getCurrentAuthUser();
+      const firebaseAuth = getFirebaseAuth();
+      console.log("[Auth] currentUser at startup", Boolean(firebaseAuth.currentUser));
+
+      unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
+        const nextUser = toAuthUserInfo(firebaseUser);
+        console.log("[Auth] onAuthStateChanged", {
+          hasUser: Boolean(firebaseUser),
+          email: nextUser?.email ?? null,
+        });
+        setUser(nextUser);
+        setIsAuthReady(true);
+        setIsLoading(false);
+      });
     } catch (error) {
       console.error("[AuthProvider] 초기 사용자 조회 실패:", error);
-      return null;
+      setUser(null);
+      setIsAuthReady(true);
+      setIsLoading(false);
     }
-  });
-  const [isLoading, setIsLoading] = useState(false);
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
     user,
@@ -55,5 +86,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   }), [user, isLoading]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{isAuthReady ? children : null}</AuthContext.Provider>;
 }

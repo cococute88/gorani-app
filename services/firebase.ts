@@ -59,7 +59,13 @@ export function getFirebaseAuth(): Auth {
     cachedAuth = initializeAuth(app, {
       persistence: getReactNativePersistence(AsyncStorage),
     });
-  } catch {
+    console.log("[Auth] persistence init", { ok: true });
+  } catch (error) {
+    console.log("[Auth] persistence init", {
+      ok: false,
+      fallback: "getAuth",
+      reason: error instanceof Error ? error.name : "unknown",
+    });
     cachedAuth = getAuth(app);
   }
 
