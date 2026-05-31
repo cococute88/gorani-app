@@ -1,5 +1,5 @@
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut } from "@firebase/auth";
 
 import { getFirebaseAuth } from "@/services/firebase";
 

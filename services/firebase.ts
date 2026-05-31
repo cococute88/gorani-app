@@ -1,5 +1,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp, type FirebaseOptions } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
+import { getAuth, getReactNativePersistence, initializeAuth, type Auth } from "@firebase/auth";
 import { getDatabase, type Database } from "firebase/database";
 
 let cachedApp: FirebaseApp | null = null;
@@ -41,7 +43,21 @@ export function getFirebaseAuth(): Auth {
     return cachedAuth;
   }
 
-  cachedAuth = getAuth(getFirebaseApp());
+  const app = getFirebaseApp();
+
+  if (Platform.OS === "web") {
+    cachedAuth = getAuth(app);
+    return cachedAuth;
+  }
+
+  try {
+    cachedAuth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch {
+    cachedAuth = getAuth(app);
+  }
+
   return cachedAuth;
 }
 
